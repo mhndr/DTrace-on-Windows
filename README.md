@@ -1,4 +1,4 @@
-# OpenDtrace
+# DTrace on Windows 
 
 The `opendtrace` repository contains the unified, cross platform,
 source code for the OpenDTrace system including kernel components and
