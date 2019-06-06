@@ -8,11 +8,11 @@
 
 ## Steps
 
-1. Install Visual Studio 2017 with the `Desktop development with C++` and `Universal Windows Platform development` workloads. Ensure the optional `Windows 10 SDK (10.0.17763.0)` component is also selected.
+1. Install Visual Studio with the `Desktop development with C++` and `Universal Windows Platform development` workloads. Ensure the optional `Windows 10 SDK (10.0.17763.0)` component is also selected.
 
 2. Install Git for Windows.
 
-3. Clone the repository (`git clone https://github.com/riverar/opendtrace.git`).
+3. Clone the repository (`git clone https://github.com/microsoft/DTrace-on-Windows`).
 
 4. Execute `releng\Get-ExternalTools.ps1` in PowerShell. (Right-click the script and select Run with PowerShell.)
 

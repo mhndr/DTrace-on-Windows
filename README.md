@@ -1,6 +1,12 @@
-# OpenDTrace
+# DTrace on Windows
 
-The `opendtrace` repository contains the unified, cross platform, source code for the OpenDTrace system including kernel components and tools for all of the platforms currently supported by the OpenDTrace system.
+Here at Microsoft, we are always looking to engage with open source communities to produce better solutions for the community and our customers. One of the more useful debugging advances that have arrived in the last decade is DTrace. DTrace of course needs no introduction: it's a dynamic tracing framework that allows an admin or developer to get a real-time look into a system either in user or kernel mode. 
+
+DTrace has a C-style high level and powerful programming language that allows you to dynamically insert trace points. Using these dynamically inserted trace points, you can filter on conditions or errors, write code to analyze lock patterns, detect deadlocks, etc. ETW, while powerful, is static and does not provide the ability to programmatically insert trace points at runtime.
+
+There are a lot of websites and resources from the community to learn about DTrace. One comprehensive option is the [Dynamic Tracing Guide](http://dtrace.org/guide). This book describes DTrace in detail and is the authoritative guide for DTrace. We also have Windows specific examples below.
+
+Starting in 2016, the OpenDTrace effort began on GitHub that tried to ensure a portable implementation of DTrace for different operating systems. We decided to add support for DTrace on Windows using this OpenDTrace port. This is a fork of the 'opendtrace' repository and contains the unified, cross platform, source code for the OpenDTrace system including kernel components.
 
 ## Install
 
@@ -12,7 +18,7 @@ Limitations:
 * Only captures traces for 64-bit processes
 
 Steps:
-1. Enable `dtrace` in the Boot Configuration Data (BCD) store. (`bcdedit /set dtrace on`)
+1. Enable `dtrace` in the Boot Configuration Data (BCD) store. (`bcdedit /set dtrace on`) You will need to repeat this step every time you install a newer build of Windows.
 
 2. Download and execute [the dtrace installer](https://download.microsoft.com/download/B/D/4/BD4B95A5-0B61-4D8F-837C-F889AAD8DAA2/DTrace.amd64.msi).
 
@@ -50,4 +56,3 @@ dtrace -Fn "fbt:ntfs::/execname==\"notepad.exe\"/{}"
 ## License
 
 OpenDTrace is under the CDDL license, see the `LICENSE` file in this repository for details.
-
