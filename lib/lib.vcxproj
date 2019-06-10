@@ -54,7 +54,7 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <PreprocessorDefinitions>YY_USE_PROTOS;YY_NEVER_INTERACTIVE;__STDC_VERSION__=199901L;__STDC_WANT_SECURE_LIB__=1;_LITTLE_ENDIAN=1;BYTE_ORDER=_LITTLE_ENDIAN;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_USRDLL;_CRT_NON_CONFORMING_SWPRINTFS;WIN32_LEAN_AND_MEAN=1;_WIN32_WINNT=0x0A00;WINVER=0x0A00;WINNT=1;NTDDI_VERSION=0x0A000000;_WINDOWS</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)libctf\common;$(ProjectDir)libdtrace\common;$(ProjectDir)libdtrace\compat\win32;$(ProjectDir)libdtrace\compat\win32\inc;$(ProjectDir)libdtrace\compat\win32\prebuilt;$(ProjectDir)..\sys\dev\dtrace\x86;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)libctf\common;$(ProjectDir)libdtrace\common;$(ProjectDir)libdtrace\compat\win32;$(ProjectDir)libdtrace\compat\win32\inc;$(IntDir)\libdtrace\compat\win32\prebuilt;$(ProjectDir)..\sys\dev\dtrace\x86;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <DisableSpecificWarnings>4274</DisableSpecificWarnings>
       <RuntimeLibrary />
@@ -84,28 +84,24 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <CustomBuild Include="libdtrace\common\dt_grammar.y">
-      <Command>"$(SolutionDir)\releng\external\tools\bin\win_bison.exe" -y "-o$(ProjectDir)\libdtrace\compat\win32\prebuilt\%(FileName).c" -d -y "%(FullPath)"</Command>
+      <Command>"$(SolutionDir)\releng\external\tools\bin\win_bison.exe" -y "-o$(IntDir)\libdtrace\compat\win32\prebuilt\%(FileName).c" -d -y "%(FullPath)"</Command>
       <Message>Bison: %(Identity)</Message>
-      <Outputs>$(ProjectDir)\libdtrace\compat\win32\prebuilt\%(Filename).c;$(ProjectDir)\libdtrace\compat\win32\prebuilt\%(Filename).h</Outputs>
-      <OutputItemType></OutputItemType>
+      <Outputs>$(IntDir)\libdtrace\compat\win32\prebuilt\%(Filename).c;$(IntDir)\libdtrace\compat\win32\prebuilt\%(Filename).h</Outputs>
     </CustomBuild>
     <CustomBuild Include="libdtrace\common\dt_lex.l">
-      <Command>"$(SolutionDir)releng\external\tools\bin\win_flex.exe" -l --wincompat "-o$(ProjectDir)libdtrace\compat\win32\prebuilt\%(FileName).c" "%(FullPath)"</Command>
+      <Command>"$(SolutionDir)releng\external\tools\bin\win_flex.exe" -l --wincompat "-o$(IntDir)\libdtrace\compat\win32\prebuilt\%(FileName).c" "%(FullPath)"</Command>
       <Message>Flex: %(Identity)</Message>
-      <Outputs>$(ProjectDir)libdtrace\compat\win32\prebuilt\%(Filename).c</Outputs>
-      <OutputItemType></OutputItemType>
+      <Outputs>$(IntDir)\libdtrace\compat\win32\prebuilt\%(Filename).c</Outputs>
     </CustomBuild>
     <CustomBuild Include="libdtrace\common\dt_errtags.h">
-      <Command>PowerShell -File "$(SolutionDir)releng\ConvertTo-ErrorTags.ps1" "%(FullPath)" "$(ProjectDir)libdtrace\compat\win32\prebuilt\%(FileName).c"</Command>
+      <Command>PowerShell -File "$(SolutionDir)releng\ConvertTo-ErrorTags.ps1" "%(FullPath)" "$(IntDir)\libdtrace\compat\win32\prebuilt\%(FileName).c"</Command>
       <Message>Creating error tags (PowerShell): %(Identity)</Message>
-      <Outputs>$(ProjectDir)libdtrace\compat\win32\prebuilt\%(Filename).c</Outputs>
-      <OutputItemType></OutputItemType>
+      <Outputs>$(IntDir)\libdtrace\compat\win32\prebuilt\%(Filename).c</Outputs>
     </CustomBuild>
     <CustomBuild Include="libdtrace\compat\win32\inc\sys\dtrace.h">
-      <Command>PowerShell -File "$(SolutionDir)releng\ConvertTo-Names.ps1" "%(FullPath)" "$(ProjectDir)libdtrace\compat\win32\prebuilt\dt_names.c"</Command>
+      <Command>PowerShell -File "$(SolutionDir)releng\ConvertTo-Names.ps1" "%(FullPath)" "$(IntDir)\libdtrace\compat\win32\prebuilt\dt_names.c"</Command>
       <Message>Creating names (PowerShell): %(Identity)</Message>
-      <Outputs>$(ProjectDir)libdtrace\compat\win32\prebuilt\dt_names.c</Outputs>
-      <OutputItemType></OutputItemType>
+      <Outputs>$(IntDir)\libdtrace\compat\win32\prebuilt\dt_names.c</Outputs>
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
@@ -172,10 +168,10 @@
     <ClCompile Include="libdtrace\compat\win32\misc.c" />
     <ClCompile Include="libdtrace\compat\win32\pr_win32.c" />
     <ClCompile Include="libdtrace\compat\win32\string.c" />
-    <ClCompile Include="libdtrace\compat\win32\prebuilt\dt_names.c" />
-    <ClCompile Include="libdtrace\compat\win32\prebuilt\dt_errtags.c" />
-    <ClCompile Include="libdtrace\compat\win32\prebuilt\dt_grammar.c" />
-    <ClCompile Include="libdtrace\compat\win32\prebuilt\dt_lex.c" />
+    <ClCompile Include="$(IntDir)\libdtrace\compat\win32\prebuilt\dt_names.c" />
+    <ClCompile Include="$(IntDir)\libdtrace\compat\win32\prebuilt\dt_errtags.c" />
+    <ClCompile Include="$(IntDir)\libdtrace\compat\win32\prebuilt\dt_grammar.c" />
+    <ClCompile Include="$(IntDir)\libdtrace\compat\win32\prebuilt\dt_lex.c" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="libgen\common\gmatch.c" />
