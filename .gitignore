@@ -50,3 +50,12 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Release Engineering Files
+build/
+releng/external
+
+# Visual Studio user artifacts
+.vs/
+*.user
+*.filters
