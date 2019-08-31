@@ -57,6 +57,10 @@ Abstract:
 
 #include <ntifs.h>
 
+//
+// External Forward Declarations
+//
+
 NTKERNELAPI
 HANDLE
 PsGetProcessInheritedFromUniqueProcessId(

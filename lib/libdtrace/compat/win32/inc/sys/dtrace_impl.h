@@ -54,6 +54,10 @@ extern "C" {
 
 #include <sys/dtrace.h>
 
+#ifdef _WIN32
+#include <dt_etw_trace.h>
+#endif
+
 #ifndef illumos
 #ifdef __sparcv9
 typedef uint32_t		pc_t;
@@ -1174,6 +1178,10 @@ struct dtrace_state {
 	char dts_destructive;			/* boolean: has dest. actions */
 	int dts_nformats;			/* number of formats */
 	char **dts_formats;			/* format string array */
+#ifdef _WIN32
+	int dts_netwtraces;						/* number of etw traces */
+	dt_etw_trace_desc_t **dts_etwtraces;	/* etw traces array */
+#endif
 	dtrace_optval_t dts_options[DTRACEOPT_MAX]; /* options */
 	dtrace_cred_t dts_cred;			/* credentials */
 	size_t dts_nretained;			/* number of retained enabs */

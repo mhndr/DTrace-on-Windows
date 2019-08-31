@@ -245,7 +245,7 @@ typedef struct _TRACE_ENGINE_HELPERS {
     ULONG
     (*WalkUserStack) (
         _In_ ULONG Limit,
-        _Out_writes_(Limit) PVOID* Stack
+        _Out_writes_(Limit) PULONGLONG Stack
         );
 
     VOID
@@ -253,6 +253,28 @@ typedef struct _TRACE_ENGINE_HELPERS {
         _In_ KPROCESSOR_MODE PreviousMode,
         _Inout_ PBOOLEAN KernelMemory,
         _Inout_ PBOOLEAN UserMemory
+        );
+
+    VOID
+    (*CollectLiveKernelDump) (
+        _In_ LPCWSTR ComponentName,
+        _In_ ULONG BugCheckCode,
+        _In_opt_ ULONG_PTR P1,
+        _In_opt_ ULONG_PTR P2,
+        _In_opt_ ULONG_PTR P3,
+        _In_opt_ ULONG_PTR P4,
+        _In_opt_ ULONG Flags
+        );
+
+    ULONG_PTR
+    (*GetTrapFrameRegister) (
+        _In_ /*PKTRAP_FRAME*/PVOID TrapFrame,
+        _In_ ULONG RegisterIndex
+        );
+
+    /*PKTRAP_FRAME*/PVOID
+    (*GetTrapFrame) (
+        VOID
         );
 
 } TRACE_ENGINE_HELPERS;

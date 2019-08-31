@@ -32,6 +32,8 @@
 #include <ctype.h>
 #ifdef illumos
 #include <alloca.h>
+#elif _WIN32
+#include <dt_etw_trace.h>
 #endif
 
 #include <dt_impl.h>
@@ -359,7 +361,13 @@ dtrace_stmt_destroy(dtrace_hdl_t *dtp, dtrace_stmtdesc_t *sdp)
 
 	if (sdp->dtsd_fmtdata != NULL)
 		dt_printf_destroy(sdp->dtsd_fmtdata);
-	dt_free(dtp, sdp->dtsd_strdata);
+	if (sdp->dtsd_strdata != NULL)
+		dt_free(dtp, sdp->dtsd_strdata);
+
+#ifdef _WIN32
+	if (sdp->dtsd_etwtrace != NULL)
+		dt_etw_trace_destroy(dtp, sdp->dtsd_etwtrace);
+#endif
 
 	dt_ecbdesc_release(dtp, sdp->dtsd_ecbdesc);
 	dt_free(dtp, sdp);

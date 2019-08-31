@@ -49,11 +49,20 @@ ULONG NCPU;
 static ULONGLONG tsc_scale;
 #define TSC_SCALE_SHIFT 28
 
-//
-// Per-CPU extended state support.
-//
+ULONGLONG dtrace_read_tsc(void)
+{
+#if defined(_ARM64_)
+    return _ReadStatusReg(ARM64_SYSREG(3,3,14,0,2));
+#elif defined(_ARM_)
+    return _MoveFromCoprocessor64(15, 1, 14); // CNTVCT
+#elif defined(_AMD64_) || defined(_X86_)
+    return __rdtsc(); // Synchronized and monotonic on supported platforms.
+#else
+#error Unsupported architecture
+#endif
+}
 
-void dtrace_calibrate_tsc(void)
+ULONGLONG dtrace_tsc_frequency_delay(void)
 {
     ULONGLONG TscFrequency;
     ULONGLONG Count;
@@ -65,7 +74,7 @@ void dtrace_calibrate_tsc(void)
 
     KeRaiseIrql(HIGH_LEVEL, &OldIrql);
     Delay = KeQueryInterruptTimePrecise(&QpcTimeStamp);
-    Count = ReadTimeStampCounter();
+    Count = dtrace_read_tsc();
     KeLowerIrql(OldIrql);
 
     SleepTime.QuadPart = -1 * 100 * 1000 * 10; // 100ms
@@ -73,13 +82,25 @@ void dtrace_calibrate_tsc(void)
 
     KeRaiseIrql(HIGH_LEVEL, &OldIrql);
     Delay = KeQueryInterruptTimePrecise(&QpcTimeStamp) - Delay;
-    Count = ReadTimeStampCounter() - Count;
+    Count = dtrace_read_tsc() - Count;
     KeLowerIrql(OldIrql);
 
     for (Scale = 1; ((NANOSEC * Scale) / Delay) < 1000; Scale += 1) {
     }
 
     TscFrequency = (Count * ((NANOSEC * Scale) / Delay)) / (100 * Scale);
+    return TscFrequency;
+}
+
+void dtrace_calibrate_tsc(void)
+{
+    ULONGLONG TscFrequency;
+    TscFrequency = dtrace_tsc_frequency_hv();
+    if (0 == TscFrequency) {
+        TscFrequency = dtrace_tsc_frequency_delay();
+        NT_ASSERT(0 != TscFrequency);
+    }
+
     tsc_scale = ((uint64_t)NANOSEC << TSC_SCALE_SHIFT) / TscFrequency;
     return;
 }
@@ -90,7 +111,7 @@ int dtrace_cpusup_init(void)
 
     NT_ASSERT(NULL == cpu_core);
 
-    NCPU = KeQueryMaximumProcessorCountEx(0);
+    NCPU = KeQueryMaximumProcessorCountEx(ALL_PROCESSOR_GROUPS);
 
     cb = NCPU * sizeof(cpu_core_t);
     cpu_core = ExAllocatePoolWithTag(NonPagedPoolNx, cb, 'CrtD');
@@ -186,94 +207,89 @@ void kmem_cache_destroy(struct kmem_cache *cachep)
 // Unique number provider.
 //
 
-struct unrnr {
-    int nr;
-    struct unrnr* next;
-};
-
 struct unrhdr {
+    ULONG delta;
+    ULONG max;
     struct kmutex* lock;
-    int low, high;
-    int watermark;
-    struct unrnr* allocated;
-    struct unrnr* freed;
+    ULONG cursor;
+    RTL_BITMAP map;
 };
 
 struct unrhdr *new_unrhdr(int low, int high, struct kmutex *mutex)
 {
-    struct unrhdr *h = kmem_zalloc(sizeof(*h), KM_SLEEP);
-    h->low = low;
-    h->high = high;
-    h->watermark = low;
-    h->lock = mutex;
-    return h;
+    NT_ASSERT(low >= 0);
+    NT_ASSERT(high > low);
+    const ULONG initsize = PAGE_SIZE;
+    struct unrhdr *uh = kmem_zalloc(sizeof(*uh), KM_SLEEP);
+    uh->map.Buffer = kmem_zalloc(initsize, KM_SLEEP);
+    uh->map.SizeOfBitMap = initsize * RTL_BITS_OF(UCHAR);
+    uh->lock = mutex;
+    uh->delta = (ULONG)low;
+    uh->max = (ULONG)(high - low);
+    NT_ASSERT((int)uh->delta == low);
+    NT_ASSERT((int)uh->max == (high - low));
+    return uh;
 }
 
 void delete_unrhdr(struct unrhdr *uh)
 {
-    struct unrnr *cur, *p;
-
-    for (cur = uh->allocated; NULL != cur;) {
-        p = cur;
-        cur = cur->next;
-        kmem_free(p, sizeof(*p));
-    }
-
-    for (cur = uh->freed; NULL != cur;) {
-        p = cur;
-        cur = cur->next;
-        kmem_free(p, sizeof(*p));
-    }
-
+    kmem_free(uh->map.Buffer, uh->map.SizeOfBitMap / RTL_BITS_OF(UCHAR));
     kmem_free(uh, sizeof(*uh));
+    return;
 }
 
 int alloc_unr(struct unrhdr *uh)
 {
-    struct unrnr *p;
-    int nr;
     mutex_enter(uh->lock);
-    if (NULL != uh->freed) {
-        p = uh->freed;
-        uh->freed = p->next;
-        p->next = uh->allocated;
-        uh->allocated = p;
-        nr = p->nr;
-        mutex_exit(uh->lock);
-        return nr;
+    ULONG nr = RtlFindClearBitsAndSet(&uh->map, 1, uh->cursor);
+    if (nr < uh->map.SizeOfBitMap) {
+        goto got_nr;
     }
 
-    p = kmem_alloc(sizeof(*p), KM_SLEEP);
-    p->nr = uh->watermark;
-    uh->watermark += 1;
-    p->next = uh->allocated;
-    uh->allocated = p;
-    nr = p->nr;
+    nr = RtlFindClearBitsAndSet(&uh->map, 1, 0);
+    if (nr < uh->map.SizeOfBitMap) {
+        goto got_nr;
+    }
+
+    ULONG old_size = uh->map.SizeOfBitMap / RTL_BITS_OF(UCHAR);
+    ULONG new_size = old_size + PAGE_SIZE;
+    ULONG new_max = new_size * RTL_BITS_OF(UCHAR);
+    if (new_max > uh->max) {
+        new_max = uh->max;
+    }
+
+    if (new_max <= uh->map.SizeOfBitMap) {
+        mutex_exit(uh->lock);
+        return -1;
+    }
+
+    PULONG new_buf = kmem_zalloc(new_size, KM_SLEEP);
+    RtlCopyMemory(new_buf, uh->map.Buffer, old_size);
+    kmem_free(uh->map.Buffer, old_size);
+    uh->cursor = uh->map.SizeOfBitMap;
+    uh->map.Buffer = new_buf;
+    uh->map.SizeOfBitMap = new_max;
+
+    nr = RtlFindClearBitsAndSet(&uh->map, 1, uh->cursor);
+    NT_ASSERT(nr < uh->map.SizeOfBitMap);
+
+got_nr:
+    uh->cursor = nr;
     mutex_exit(uh->lock);
-    return nr;
+    return nr + uh->delta;
 }
 
 void free_unr(struct unrhdr *uh, int item)
 {
-    struct unrnr *p, **pp;
     mutex_enter(uh->lock);
-    for (pp = &uh->allocated; NULL != *pp;) {
-        p = *pp;
-        if (item == p->nr) {
-            *pp = p->next;
-            p->next = uh->freed;
-            uh->freed = p;
-            mutex_exit(uh->lock);
-            return;
-        }
-
-        pp = &p->next;
-    }
-
-    NT_ASSERT(FALSE);
+    NT_ASSERT(item >= uh->delta);
+    item -= uh->delta;
+    NT_ASSERT(item < uh->map.SizeOfBitMap);
+    NT_ASSERT(item == (int)(ULONG)item);
+    RtlClearBit(&uh->map, (ULONG)item);
     mutex_exit(uh->lock);
+    return;
 }
-
 
 //
 // Misc dtrace subroutines.
@@ -347,7 +363,7 @@ hrtime_t dtrace_gethrtime(void)
 {
     LARGE_INTEGER c;
 
-    c.QuadPart = ReadTimeStampCounter();
+    c.QuadPart = dtrace_read_tsc();
 
     return (((c.LowPart * tsc_scale) >> TSC_SCALE_SHIFT) +
             ((c.HighPart * tsc_scale) << (32 - TSC_SCALE_SHIFT)));
@@ -480,7 +496,16 @@ void dtrace_getufpstack(uint64_t *pcstack, uint64_t *fpstack, int pcstack_limit)
 
 void dtrace_getupcstack(uint64_t *pcstack, int pcstack_limit)
 {
-    ULONG captured = dtrace_userstackwalk(pcstack_limit, (PVOID*)pcstack);
+    if (pcstack_limit < 1) {
+        return;
+    }
+
+    *pcstack = (uint64_t)PsGetProcessId(PsGetCurrentProcess());
+    int captured = 1;
+
+    captured += dtrace_userstackwalk(pcstack_limit - captured,
+                                     pcstack + captured);
+
     while (captured < pcstack_limit) {
         pcstack[captured++] = 0;
     }
@@ -583,10 +608,7 @@ volatile const char* panicstr;
 void dtrace_vpanic(const char *s, __va_list ap)
 {
     panicstr = s;
-    for (;;) {
-        __debugbreak();
-    }
-    //KeBugCheckEx(<user_induced>, s, ap, 0, 0);
+    KeBugCheckEx(MANUALLY_INITIATED_CRASH, 'crTD', (ULONG_PTR)s, (ULONG_PTR)ap, 0);
 }
 
 void cmn_err(int level, char *format, ...)

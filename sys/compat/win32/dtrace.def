@@ -1,0 +1,22 @@
+EXPORTS
+
+    dtrace_register
+    dtrace_unregister
+    dtrace_invalidate
+    dtrace_condense
+    dtrace_attached
+    dtrace_probe_create
+    dtrace_probe_lookup
+    dtrace_probe_arg
+    dtrace_probe
+
+    dtrace_meta_register
+    dtrace_meta_unregister
+
+    dtrace_gethrtime
+    dtrace_sync
+    dtrace_interrupt_disable
+    dtrace_interrupt_enable
+    dtrace_panic
+    dtrace_vpanic
+

@@ -46,6 +46,10 @@
 #include <dt_xlator.h>
 #include <dt_dof.h>
 
+#ifdef _WIN32
+#include <dt_etw_trace.h>
+#endif
+
 void
 dt_dof_init(dtrace_hdl_t *dtp)
 {
@@ -69,6 +73,10 @@ dt_dof_init(dtrace_hdl_t *dtp)
 	dt_buf_create(dtp, &ddo->ddo_rels, "probe rels", 0);
 
 	dt_buf_create(dtp, &ddo->ddo_xlms, "xlate members", 0);
+
+#ifdef _WIN32
+	dt_buf_create(dtp, &ddo->ddo_etwtraces, "etw traces", 0);
+#endif
 }
 
 void
@@ -91,6 +99,10 @@ dt_dof_fini(dtrace_hdl_t *dtp)
 	dt_buf_destroy(dtp, &ddo->ddo_rels);
 
 	dt_buf_destroy(dtp, &ddo->ddo_xlms);
+
+#ifdef _WIN32
+	dt_buf_destroy(dtp, &ddo->ddo_etwtraces);
+#endif
 }
 
 static int
@@ -131,6 +143,11 @@ dt_dof_reset(dtrace_hdl_t *dtp, dtrace_prog_t *pgp)
 	dt_buf_reset(dtp, &ddo->ddo_rels);
 
 	dt_buf_reset(dtp, &ddo->ddo_xlms);
+
+#ifdef _WIN32
+	dt_buf_reset(dtp, &ddo->ddo_etwtraces);
+#endif
+
 	return (0);
 }
 
@@ -204,6 +221,27 @@ dof_add_string(dt_dof_t *ddo, const char *s)
 	dt_buf_write(ddo->ddo_hdl, bp, s, strlen(s) + 1, sizeof (char));
 	return (i);
 }
+
+#ifdef _WIN32
+
+/*
+ * Add an etw trace descriptor to the global etw trace table associated
+ * with the DOF. The offset of the trace is returned as in index
+ * into the etw trace table.
+ */
+static dof_etwidx_t
+dof_add_etw_trace(dt_dof_t *ddo, dt_etw_trace_desc_t *det)
+{
+	dt_buf_t *bp = &ddo->ddo_etwtraces;
+	dof_etwidx_t i = (dof_etwidx_t)dt_buf_len(bp);
+
+	dt_buf_write(ddo->ddo_hdl, bp, det, DT_ETW_TRACE_BSIZE(det),
+		sizeof (char));
+
+	return (i);
+}
+
+#endif
 
 static dof_attr_t
 dof_attr(const dtrace_attribute_t *ap)
@@ -687,6 +725,19 @@ dtrace_dof_create(dtrace_hdl_t *dtp, dtrace_prog_t *pgp, uint_t flags)
 	ddo->ddo_strsec = dof_add_lsect(ddo, NULL, DOF_SECT_STRTAB, 1, 0, 0, 0);
 	(void) dof_add_string(ddo, "");
 
+#ifdef _WIN32
+	ddo->ddo_etwtracesec = dof_add_lsect(ddo, NULL, DOF_SECT_ETWTRACE,
+		sizeof (char), 0, 0, 0);
+
+	/*
+	* We add a dummy char at the beginning of the section, at index 0,
+	* so that the first real etw trace is at an index different to 0.
+	*/
+	char dummy = '.';
+	dt_buf_write(ddo->ddo_hdl, &ddo->ddo_etwtraces, &dummy, sizeof (char),
+		sizeof (char));
+#endif
+
 	/*
 	 * If there are references to dynamic translators in the program, add
 	 * an imported translator table entry for each referenced translator.
@@ -717,6 +768,10 @@ dtrace_dof_create(dtrace_hdl_t *dtp, dtrace_prog_t *pgp, uint_t flags)
 		dof_probedesc_t dofp;
 		dof_ecbdesc_t dofe;
 		uint_t i;
+
+#ifdef _WIN32
+		dof_etwidx_t etwidx = 0;
+#endif
 
 		if ((edp = stp->ds_desc->dtsd_ecbdesc) == last)
 			continue; /* same ecb as previous statement */
@@ -764,17 +819,36 @@ dtrace_dof_create(dtrace_hdl_t *dtp, dtrace_prog_t *pgp, uint_t flags)
 			 * be due either to a printf() format string
 			 * (dtsd_fmtdata) or a print() type string
 			 * (dtsd_strdata).
+			 * If the action has etw trace data, add it to the
+			 * etw trace table. This is from an etw_trace() call
+			 * in the D script (dtsd_etwtrace).
 			 */
 			if (sdp != NULL && ap == sdp->dtsd_action) {
 				if (sdp->dtsd_fmtdata != NULL) {
 					(void) dtrace_printf_format(dtp,
 					    sdp->dtsd_fmtdata, fmt, maxfmt + 1);
 					strndx = dof_add_string(ddo, fmt);
+#ifdef _WIN32
+					etwidx = 0;
+#endif
 				} else if (sdp->dtsd_strdata != NULL) {
 					strndx = dof_add_string(ddo,
 					    sdp->dtsd_strdata);
-				} else {
+#ifdef _WIN32
+					etwidx = 0;
+#endif
+				}
+#ifdef _WIN32
+				else if (sdp->dtsd_etwtrace != NULL) {
+					etwidx = dof_add_etw_trace(ddo, sdp->dtsd_etwtrace);
+					strndx = 0;
+				}
+#endif
+				else {
 					strndx = 0; /* use dtad_arg instead */
+#ifdef _WIN32
+					etwidx = 0;
+#endif
 				}
 
 				if ((next = dt_list_next(next)) != NULL)
@@ -782,6 +856,13 @@ dtrace_dof_create(dtrace_hdl_t *dtp, dtrace_prog_t *pgp, uint_t flags)
 				else
 					sdp = NULL;
 			}
+
+#ifdef _WIN32
+			if (etwidx != 0) {
+				dofa[i].dofa_arg = etwidx;
+				dofa[i].dofa_etwtab = ddo->ddo_etwtracesec;
+			} else
+#endif
 
 			if (strndx != 0) {
 				dofa[i].dofa_arg = strndx;
@@ -846,9 +927,16 @@ dtrace_dof_create(dtrace_hdl_t *dtp, dtrace_prog_t *pgp, uint_t flags)
 	h.dofh_secnum = ddo->ddo_nsecs;
 	ssize = sizeof (h) + dt_buf_len(&ddo->ddo_secs);
 
+#ifdef _WIN32
+	h.dofh_loadsz = ssize +
+	    dt_buf_len(&ddo->ddo_ldata) +
+	    dt_buf_len(&ddo->ddo_strs) +
+		dt_buf_len(&ddo->ddo_etwtraces);
+#else
 	h.dofh_loadsz = ssize +
 	    dt_buf_len(&ddo->ddo_ldata) +
 	    dt_buf_len(&ddo->ddo_strs);
+#endif
 
 	if (dt_buf_len(&ddo->ddo_udata) != 0) {
 		lsize = roundup(h.dofh_loadsz, sizeof (uint64_t));
@@ -875,6 +963,15 @@ dtrace_dof_create(dtrace_hdl_t *dtp, dtrace_prog_t *pgp, uint_t flags)
 	sp[ddo->ddo_strsec].dofs_offset = ssize + dt_buf_len(&ddo->ddo_ldata);
 	sp[ddo->ddo_strsec].dofs_size = dt_buf_len(&ddo->ddo_strs);
 
+#ifdef _WIN32
+	assert(sp[ddo->ddo_etwtracesec].dofs_type == DOF_SECT_ETWTRACE);
+	sp[ddo->ddo_etwtracesec].dofs_offset = sp[ddo->ddo_strsec].dofs_offset +
+		sp[ddo->ddo_strsec].dofs_size;
+	sp[ddo->ddo_etwtracesec].dofs_size = dt_buf_len(&ddo->ddo_etwtraces);
+#else
+
+#endif
+
 	/*
 	 * Now relocate all the other section headers by adding the appropriate
 	 * delta to their respective dofs_offset values.
@@ -882,6 +979,11 @@ dtrace_dof_create(dtrace_hdl_t *dtp, dtrace_prog_t *pgp, uint_t flags)
 	for (i = 0; i < ddo->ddo_nsecs; i++, sp++) {
 		if (i == ddo->ddo_strsec)
 			continue; /* already relocated above */
+
+#ifdef _WIN32
+		if (i == ddo->ddo_etwtracesec)
+			continue; /* already relocated above */
+#endif
 
 		if (sp->dofs_flags & DOF_SECF_LOAD)
 			sp->dofs_offset += ssize;
@@ -900,6 +1002,9 @@ dtrace_dof_create(dtrace_hdl_t *dtp, dtrace_prog_t *pgp, uint_t flags)
 	dt_buf_concat(dtp, &dof, &ddo->ddo_secs, sizeof (uint64_t));
 	dt_buf_concat(dtp, &dof, &ddo->ddo_ldata, sizeof (uint64_t));
 	dt_buf_concat(dtp, &dof, &ddo->ddo_strs, sizeof (char));
+#ifdef _WIN32
+	dt_buf_concat(dtp, &dof, &ddo->ddo_etwtraces, sizeof (char));
+#endif
 	dt_buf_concat(dtp, &dof, &ddo->ddo_udata, sizeof (uint64_t));
 
 	return (dt_buf_claim(dtp, &dof));

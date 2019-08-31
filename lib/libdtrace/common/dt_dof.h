@@ -44,6 +44,9 @@ typedef struct dt_dof {
 	dof_secidx_t ddo_strsec; 	/* global strings section index */
 	dof_secidx_t *ddo_xlimport;	/* imported xlator section indices */
 	dof_secidx_t *ddo_xlexport;	/* exported xlator section indices */
+#ifdef _WIN32
+	dof_secidx_t ddo_etwtracesec;	/* etw trace section index */
+#endif
 	dt_buf_t ddo_secs;		/* section headers */
 	dt_buf_t ddo_strs;		/* global strings */
 	dt_buf_t ddo_ldata;		/* loadable section data */
@@ -54,6 +57,9 @@ typedef struct dt_dof {
 	dt_buf_t ddo_enoffs;		/* is-enabled offsets section data */
 	dt_buf_t ddo_rels;		/* probe relocation section data */
 	dt_buf_t ddo_xlms;		/* xlate members section data */
+#ifdef _WIN32
+	dt_buf_t ddo_etwtraces;	/* global etw traces */
+#endif
 } dt_dof_t;
 
 extern void dt_dof_init(dtrace_hdl_t *);

@@ -44,7 +44,7 @@
  * alnum characters ([a-z][A-Z][0-9]).
  */
 
-#pragma weak _getopt = getopt
+//#pragma weak _getopt = getopt
 
 //#include "lint.h"
 //#include "_libc_gettext.h"

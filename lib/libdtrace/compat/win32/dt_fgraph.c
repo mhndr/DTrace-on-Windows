@@ -89,6 +89,8 @@ static int dt_disasm_analyze(
             return 0;
         }
 
+        block->size += isize;
+
         struct dt_disasm_instr* instr =
             (struct dt_disasm_instr*)(graph + 1) + offset / minisize;
 
@@ -142,9 +144,11 @@ static int dt_disasm_analyze(
         instr->size = (uint8_t)isize;
 
         offset += isize;
-        block->size += isize;
 
-        if (idesc.NoFallThrouth) {
+        if (idesc.NoFallThrouth ||
+            ((NULL != block->next) &&
+             ((block->rva + block->size) == block->next->rva))) {
+
             for (block = &graph->block; NULL != block; block = block->next) {
                 if (0 == block->size) {
                     break;

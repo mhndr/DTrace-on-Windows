@@ -70,6 +70,10 @@
 #include <ieeefp.h>
 #endif
 
+#ifdef _WIN32
+#include <dt_etw_trace.h>
+#endif
+
 /*
  * Stability and versioning definitions.  These #defines are used in the tables
  * of identifiers below to fill in the attribute and version fields associated
@@ -94,8 +98,10 @@
 	DTRACE_STABILITY_STABLE, DTRACE_CLASS_COMMON }
 
 #define	DT_ATTR_EVOLCMN { DTRACE_STABILITY_EVOLVING, \
-	DTRACE_STABILITY_EVOLVING, DTRACE_CLASS_COMMON \
-}
+	DTRACE_STABILITY_EVOLVING, DTRACE_CLASS_COMMON }
+
+#define DT_ATTR_EXTPLAT { DTRACE_STABILITY_EXTERNAL, \
+	DTRACE_STABILITY_EXTERNAL, DTRACE_CLASS_PLATFORM}
 
 /*
  * The version number should be increased for every customer visible release
@@ -134,8 +140,14 @@
 #define	DT_VERS_1_12	DT_VERSION_NUMBER(1, 12, 0)
 #define	DT_VERS_1_12_1	DT_VERSION_NUMBER(1, 12, 1)
 #define	DT_VERS_1_13	DT_VERSION_NUMBER(1, 13, 0)
+#ifdef _WIN32
+#define	DT_VERS_1_13_1	DT_VERSION_NUMBER(1, 13, 1)
+#define	DT_VERS_LATEST	DT_VERS_1_13_1
+#define	DT_VERS_STRING	"Sun D 1.13.1"
+#else
 #define	DT_VERS_LATEST	DT_VERS_1_13
 #define	DT_VERS_STRING	"Sun D 1.13"
+#endif
 
 const dt_version_t _dtrace_versions[] = {
 	DT_VERS_1_0,	/* D API 1.0.0 (PSARC 2001/466) Solaris 10 FCS */
@@ -162,6 +174,9 @@ const dt_version_t _dtrace_versions[] = {
 	DT_VERS_1_12,	/* D API 1.12 */
 	DT_VERS_1_12_1,	/* D API 1.12.1 */
 	DT_VERS_1_13,	/* D API 1.13 */
+#ifdef _WIN32
+	DT_VERS_1_13_1,	/* D API 1.13.1 */
+#endif
 	0
 };
 
@@ -317,7 +332,7 @@ static const dt_ident_t _dtrace_globals[] = {
 #endif
 { "inet_ntop", DT_IDENT_FUNC, 0, DIF_SUBR_INET_NTOP, DT_ATTR_STABCMN,
 	DT_VERS_1_5, &dt_idops_func, "string(int, void *)" },
-#if defined(_WIN32)
+#ifdef _WIN32
 { "irql", DT_IDENT_SCALAR, 0, DIF_VAR_IPL, DT_ATTR_STABCMN, DT_VERS_1_0,
 	&dt_idops_type, "nt`KIRQL" },
 #else
@@ -334,6 +349,11 @@ static const dt_ident_t _dtrace_globals[] = {
 	&dt_idops_func, "string(const char *, const char *)" },
 { "jstack", DT_IDENT_ACTFUNC, 0, DT_ACT_JSTACK, DT_ATTR_STABCMN, DT_VERS_1_0,
 	&dt_idops_func, "stack(...)" },
+#ifdef _WIN32
+{ "lkd", DT_IDENT_ACTFUNC, 0, DT_ACT_LKD, DT_ATTR_EVOLCMN, DT_VERS_1_0,
+	&dt_idops_func,
+	"void([uint64_t])" },
+#endif
 { "lltostr", DT_IDENT_FUNC, 0, DIF_SUBR_LLTOSTR, DT_ATTR_STABCMN, DT_VERS_1_0,
 	&dt_idops_func, "string(int64_t, [int])" },
 { "llquantize", DT_IDENT_AGGFUNC, 0, DTRACEAGG_LLQUANTIZE, DT_ATTR_STABCMN,
@@ -553,6 +573,12 @@ static const dt_ident_t _dtrace_globals[] = {
 #ifndef illumos
 { "cpu", DT_IDENT_SCALAR, 0, DIF_VAR_CPU,
 	DT_ATTR_STABCMN, DT_VERS_1_6_3, &dt_idops_type, "int" },
+#endif
+
+#ifdef _WIN32
+{ "etw_trace", DT_IDENT_ACTFUNC, 0, DT_ACT_ETW_TRACE, DT_ATTR_EXTPLAT,
+	DT_VERS_1_13_1, &dt_idops_func,
+	"void(const char *, const char *, const char *, ...)" },
 #endif
 
 { NULL, 0, 0, 0, { 0, 0, 0 }, 0, NULL, NULL }
@@ -1779,6 +1805,9 @@ dtrace_close(dtrace_hdl_t *dtp)
 	dt_aggid_destroy(dtp);
 	dt_format_destroy(dtp);
 	dt_strdata_destroy(dtp);
+#ifdef _WIN32
+	dt_etw_destroy(dtp);
+#endif
 	dt_buffered_destroy(dtp);
 	dt_aggregate_destroy(dtp);
 	dt_pfdict_destroy(dtp);

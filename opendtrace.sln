@@ -3,12 +3,14 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28307.489
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dtrace.dll", "lib\lib.vcxproj", "{74999117-0440-4E16-84FD-42B5703E59EC}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dtrace.exe", "cmd\cmd.vcxproj", "{40020A21-05FF-4EBD-B562-23D4214D2425}"
 	ProjectSection(ProjectDependencies) = postProject
 		{74999117-0440-4E16-84FD-42B5703E59EC} = {74999117-0440-4E16-84FD-42B5703E59EC}
 	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dtrace.dll", "lib\lib.vcxproj", "{74999117-0440-4E16-84FD-42B5703E59EC}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dtrace.sys", "sys\sys.vcxproj", "{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -54,6 +56,30 @@ Global
 		{40020A21-05FF-4EBD-B562-23D4214D2425}.Release|x64.Build.0 = Release|x64
 		{40020A21-05FF-4EBD-B562-23D4214D2425}.Release|x86.ActiveCfg = Release|Win32
 		{40020A21-05FF-4EBD-B562-23D4214D2425}.Release|x86.Build.0 = Release|Win32
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Debug|ARM.ActiveCfg = Debug|ARM
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Debug|ARM.Build.0 = Debug|ARM
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Debug|ARM.Deploy.0 = Debug|ARM
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Debug|ARM64.Build.0 = Debug|ARM64
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Debug|ARM64.Deploy.0 = Debug|ARM64
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Debug|x86.ActiveCfg = Debug|Win32
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Debug|x86.Build.0 = Debug|Win32
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Debug|x86.Deploy.0 = Debug|Win32
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Debug|x64.ActiveCfg = Debug|x64
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Debug|x64.Build.0 = Debug|x64
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Debug|x64.Deploy.0 = Debug|x64
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Release|ARM.ActiveCfg = Release|ARM
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Release|ARM.Build.0 = Release|ARM
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Release|ARM.Deploy.0 = Release|ARM
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Release|ARM64.ActiveCfg = Release|ARM64
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Release|ARM64.Build.0 = Release|ARM64
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Release|ARM64.Deploy.0 = Release|ARM64
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Release|x86.ActiveCfg = Release|Win32
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Release|x86.Build.0 = Release|Win32
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Release|x86.Deploy.0 = Release|Win32
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Release|x64.ActiveCfg = Release|x64
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Release|x64.Build.0 = Release|x64
+		{AF2C77AE-E7D9-4EF6-84EF-3FCEA764A8D7}.Release|x64.Deploy.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

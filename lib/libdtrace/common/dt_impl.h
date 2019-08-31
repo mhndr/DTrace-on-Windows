@@ -98,9 +98,9 @@ typedef struct dt_modops {
 	uint_t (*do_syminit)(struct dt_module *);
 	void (*do_symsort)(struct dt_module *);
 	GElf_Sym *(*do_symname)(struct dt_module *,
-	    const char *, GElf_Sym *, uint_t *);
+		const char *, GElf_Sym *, uint_t *);
 	GElf_Sym *(*do_symaddr)(struct dt_module *,
-	    GElf_Addr, GElf_Sym *, uint_t *);
+		GElf_Addr, GElf_Sym *, uint_t *);
 } dt_modops_t;
 
 typedef struct dt_arg {
@@ -306,6 +306,10 @@ struct dtrace_hdl {
 	void **dt_formats;	/* pointer to format array */
 	int dt_maxstrdata;	/* max strdata ID */
 	char **dt_strdata;	/* pointer to strdata array */
+#ifdef _WIN32
+	int dt_maxetw;	/* max etw trace ID */
+	void **dt_etw;	/* pointer to etw traces array */
+#endif
 	dt_aggregate_t dt_aggregate; /* aggregate */
 	dt_pq_t *dt_bufq;	/* CPU-specific data queue */
 	struct dt_pfdict *dt_pfdict; /* dictionary of printf conversions */
@@ -514,6 +518,10 @@ struct dtrace_hdl {
 #define	DT_ACT_SETOPT		DT_ACT(28)	/* setopt() action */
 #define	DT_ACT_PRINT		DT_ACT(29)	/* print() action */
 #define	DT_ACT_PRINTM		DT_ACT(30)	/* printm() action */
+#ifdef _WIN32
+#define DT_ACT_ETW_TRACE	DT_ACT(31)	/* etw_trace() action */
+#define	DT_ACT_LKD		DT_ACT(32)	/* lkd() action */
+#endif
 
 /*
  * Sentinel to tell freopen() to restore the saved stdout.  This must not
@@ -600,7 +608,11 @@ enum {
 	EDT_OVERSION,		/* client is requesting deprecated version */
 	EDT_ENABLING_ERR,	/* failed to enable probe */
 	EDT_NOPROBES,		/* no probes sites for declared provider */
-	EDT_CANTLOAD		/* failed to load a module */
+	EDT_CANTLOAD,		/* failed to load a module */
+#ifdef _WIN32
+	EDT_BADETWTRACE,	/* invalid etw trace */
+	EDT_ETWTRACEFAIL,	/* failure on etw trace */
+#endif
 };
 
 #ifdef _WIN32
@@ -650,7 +662,7 @@ extern char *dt_cpp_add_arg(dtrace_hdl_t *, const char *);
 extern char *dt_cpp_pop_arg(dtrace_hdl_t *);
 
 extern dtrace_prog_t *dt_program_strcompile(dtrace_hdl_t *,
-    const char *, dtrace_probespec_t, uint_t, int, char *const []);
+	const char *, dtrace_probespec_t, uint_t, int, char *const []);
 
 #ifdef illumos
 extern int dt_set_errno(dtrace_hdl_t *, int);
@@ -660,7 +672,7 @@ void dt_get_errloc(dtrace_hdl_t *, const char **, int *);
 #define dt_set_errno(_a,_b)	_dt_set_errno(_a,_b,__FILE__,__LINE__)
 #endif
 extern void dt_set_errmsg(dtrace_hdl_t *, const char *, const char *,
-    const char *, int, const char *, va_list);
+	const char *, int, const char *, va_list);
 
 #ifdef illumos
 extern int dt_ioctl(dtrace_hdl_t *, int, void *);
@@ -685,7 +697,7 @@ extern ulong_t dt_popcb(const ulong_t *, ulong_t);
 
 extern int dt_buffered_enable(dtrace_hdl_t *);
 extern int dt_buffered_flush(dtrace_hdl_t *, dtrace_probedata_t *,
-    const dtrace_recdesc_t *, const dtrace_aggdata_t *, uint32_t flags);
+	const dtrace_recdesc_t *, const dtrace_aggdata_t *, uint32_t flags);
 extern void dt_buffered_disable(dtrace_hdl_t *);
 extern void dt_buffered_destroy(dtrace_hdl_t *);
 
@@ -717,7 +729,7 @@ extern int dt_aggregate_init(dtrace_hdl_t *);
 extern void dt_aggregate_destroy(dtrace_hdl_t *);
 
 extern int dt_epid_lookup(dtrace_hdl_t *, dtrace_epid_t,
-    dtrace_eprobedesc_t **, dtrace_probedesc_t **);
+	dtrace_eprobedesc_t **, dtrace_probedesc_t **);
 extern void dt_epid_destroy(dtrace_hdl_t *);
 extern int dt_aggid_lookup(dtrace_hdl_t *, dtrace_aggid_t, dtrace_aggdesc_t **);
 extern void dt_aggid_destroy(dtrace_hdl_t *);
@@ -728,21 +740,26 @@ extern void dt_format_destroy(dtrace_hdl_t *);
 extern const char *dt_strdata_lookup(dtrace_hdl_t *, int);
 extern void dt_strdata_destroy(dtrace_hdl_t *);
 
+#ifdef _WIN32
+extern void *dt_etw_lookup(dtrace_hdl_t *, int);
+extern void dt_etw_destroy(dtrace_hdl_t *);
+#endif
+
 extern int dt_print_quantize(dtrace_hdl_t *, FILE *,
-    const void *, size_t, uint64_t);
+	const void *, size_t, uint64_t);
 extern int dt_print_lquantize(dtrace_hdl_t *, FILE *,
-    const void *, size_t, uint64_t);
+	const void *, size_t, uint64_t);
 extern int dt_print_llquantize(dtrace_hdl_t *, FILE *,
-    const void *, size_t, uint64_t);
+	const void *, size_t, uint64_t);
 extern int dt_print_agg(const dtrace_aggdata_t *, void *);
 
 extern int dt_handle(dtrace_hdl_t *, dtrace_probedata_t *);
 extern int dt_handle_liberr(dtrace_hdl_t *,
-    const dtrace_probedata_t *, const char *);
+	const dtrace_probedata_t *, const char *);
 extern int dt_handle_cpudrop(dtrace_hdl_t *, processorid_t,
-    dtrace_dropkind_t, uint64_t);
+	dtrace_dropkind_t, uint64_t);
 extern int dt_handle_status(dtrace_hdl_t *,
-    dtrace_status_t *, dtrace_status_t *);
+	dtrace_status_t *, dtrace_status_t *);
 extern int dt_handle_setopt(dtrace_hdl_t *, dtrace_setoptdata_t *);
 
 extern int dt_lib_depend_add(dtrace_hdl_t *, dt_list_t *, const char *);

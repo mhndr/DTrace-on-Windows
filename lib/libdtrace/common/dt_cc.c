@@ -48,6 +48,7 @@
  * dt_ident.c - identifier and symbol table routines
  * dt_pragma.c - #pragma processing and D pragmas
  * dt_printf.c - D printf() and printa() argument checking and processing
+ * dt_etw_trace.cpp - D etw_trace() argument checking and processing
  * dt_cc.c - compiler driver and dtrace_prog_t construction
  * dt_cg.c - DIF code generator
  * dt_as.c - DIF assembler
@@ -111,6 +112,9 @@
 #include <dt_ident.h>
 #include <dt_string.h>
 #include <dt_impl.h>
+#ifdef _WIN32
+#include <dt_etw_trace.h>
+#endif
 
 static const dtrace_diftype_t dt_void_rtype = {
 	DIF_TYPE_CTF, CTF_K_INTEGER, 0, 0, 0
@@ -121,14 +125,14 @@ static const dtrace_diftype_t dt_int_rtype = {
 };
 
 static void *dt_compile(dtrace_hdl_t *, int, int, dtrace_probespec_t, void *,
-    uint_t, int, char *const[], FILE *, const char *);
+	uint_t, int, char *const[], FILE *, const char *);
 
 /*ARGSUSED*/
 static int
 dt_idreset(dt_idhash_t *dhp, dt_ident_t *idp, void *ignored)
 {
 	idp->di_flags &= ~(DT_IDFLG_REF | DT_IDFLG_MOD |
-	    DT_IDFLG_DIFR | DT_IDFLG_DIFW);
+		DT_IDFLG_DIFR | DT_IDFLG_DIFW);
 	return (0);
 }
 
@@ -143,7 +147,7 @@ dt_idpragma(dt_idhash_t *dhp, dt_ident_t *idp, void *ignored)
 
 static dtrace_stmtdesc_t *
 dt_stmt_create(dtrace_hdl_t *dtp, dtrace_ecbdesc_t *edp,
-    dtrace_attribute_t descattr, dtrace_attribute_t stmtattr)
+	dtrace_attribute_t descattr, dtrace_attribute_t stmtattr)
 {
 	dtrace_stmtdesc_t *sdp = dtrace_stmt_create(dtp, edp);
 
@@ -178,7 +182,7 @@ static int
 dt_action_destructive(const dtrace_actdesc_t *ap)
 {
 	return (DTRACEACT_ISDESTRUCTIVE(ap->dtad_kind) || (ap->dtad_kind ==
-	    DTRACEACT_DIFEXPR && ap->dtad_difo->dtdo_destructive));
+		DTRACEACT_DIFEXPR && ap->dtad_difo->dtdo_destructive));
 }
 
 static void
@@ -197,12 +201,12 @@ dt_stmt_append(dtrace_stmtdesc_t *sdp, const dt_node_t *dnp)
 		if (ap->dtad_kind == DTRACEACT_COMMIT) {
 			if (commit) {
 				dnerror(dnp, D_COMM_COMM, "commit( ) may "
-				    "not follow commit( )\n");
+					"not follow commit( )\n");
 			}
 
 			if (datarec) {
 				dnerror(dnp, D_COMM_DREC, "commit( ) may "
-				    "not follow data-recording action(s)\n");
+					"not follow data-recording action(s)\n");
 			}
 
 			for (tap = ap; tap != NULL; tap = tap->dtad_next) {
@@ -210,7 +214,7 @@ dt_stmt_append(dtrace_stmtdesc_t *sdp, const dt_node_t *dnp)
 					continue;
 
 				dnerror(dnp, D_AGG_COMM, "aggregating actions "
-				    "may not follow commit( )\n");
+					"may not follow commit( )\n");
 			}
 
 			commit = 1;
@@ -220,17 +224,17 @@ dt_stmt_append(dtrace_stmtdesc_t *sdp, const dt_node_t *dnp)
 		if (ap->dtad_kind == DTRACEACT_SPECULATE) {
 			if (speculate) {
 				dnerror(dnp, D_SPEC_SPEC, "speculate( ) may "
-				    "not follow speculate( )\n");
+					"not follow speculate( )\n");
 			}
 
 			if (commit) {
 				dnerror(dnp, D_SPEC_COMM, "speculate( ) may "
-				    "not follow commit( )\n");
+					"not follow commit( )\n");
 			}
 
 			if (datarec) {
 				dnerror(dnp, D_SPEC_DREC, "speculate( ) may "
-				    "not follow data-recording action(s)\n");
+					"not follow data-recording action(s)\n");
 			}
 
 			speculate = 1;
@@ -240,7 +244,7 @@ dt_stmt_append(dtrace_stmtdesc_t *sdp, const dt_node_t *dnp)
 		if (DTRACEACT_ISAGG(ap->dtad_kind)) {
 			if (speculate) {
 				dnerror(dnp, D_AGG_SPEC, "aggregating actions "
-				    "may not follow speculate( )\n");
+					"may not follow speculate( )\n");
 			}
 
 			datarec = 1;
@@ -250,12 +254,12 @@ dt_stmt_append(dtrace_stmtdesc_t *sdp, const dt_node_t *dnp)
 		if (speculate) {
 			if (dt_action_destructive(ap)) {
 				dnerror(dnp, D_ACT_SPEC, "destructive actions "
-				    "may not follow speculate( )\n");
+					"may not follow speculate( )\n");
 			}
 
 			if (ap->dtad_kind == DTRACEACT_EXIT) {
 				dnerror(dnp, D_EXIT_SPEC, "exit( ) may not "
-				    "follow speculate( )\n");
+					"follow speculate( )\n");
 			}
 		}
 
@@ -263,17 +267,17 @@ dt_stmt_append(dtrace_stmtdesc_t *sdp, const dt_node_t *dnp)
 		 * Exclude all non data-recording actions.
 		 */
 		if (dt_action_destructive(ap) ||
-		    ap->dtad_kind == DTRACEACT_DISCARD)
+			ap->dtad_kind == DTRACEACT_DISCARD)
 			continue;
 
 		if (ap->dtad_kind == DTRACEACT_DIFEXPR &&
-		    ap->dtad_difo->dtdo_rtype.dtdt_kind == DIF_TYPE_CTF &&
-		    ap->dtad_difo->dtdo_rtype.dtdt_size == 0)
+			ap->dtad_difo->dtdo_rtype.dtdt_kind == DIF_TYPE_CTF &&
+			ap->dtad_difo->dtdo_rtype.dtdt_size == 0)
 			continue;
 
 		if (commit) {
 			dnerror(dnp, D_DREC_COMM, "data-recording actions "
-			    "may not follow commit( )\n");
+				"may not follow commit( )\n");
 		}
 
 		if (!speculate)
@@ -336,8 +340,8 @@ dt_action_clear(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 	if (argc != 1) {
 		dnerror(dnp, D_CLEAR_PROTO,
-		    "%s( ) prototype mismatch: %d args passed, 1 expected\n",
-		    dnp->dn_ident->di_name, argc);
+			"%s( ) prototype mismatch: %d args passed, 1 expected\n",
+			dnp->dn_ident->di_name, argc);
 	}
 
 	anp = dnp->dn_args;
@@ -345,17 +349,17 @@ dt_action_clear(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 	if (anp->dn_kind != DT_NODE_AGG) {
 		dnerror(dnp, D_CLEAR_AGGARG,
-		    "%s( ) argument #1 is incompatible with prototype:\n"
-		    "\tprototype: aggregation\n\t argument: %s\n",
-		    dnp->dn_ident->di_name,
-		    dt_node_type_name(anp, n, sizeof (n)));
+			"%s( ) argument #1 is incompatible with prototype:\n"
+			"\tprototype: aggregation\n\t argument: %s\n",
+			dnp->dn_ident->di_name,
+			dt_node_type_name(anp, n, sizeof (n)));
 	}
 
 	aid = anp->dn_ident;
 
 	if (aid->di_gen == dtp->dt_gen && !(aid->di_flags & DT_IDFLG_MOD)) {
 		dnerror(dnp, D_CLEAR_AGGBAD,
-		    "undefined aggregation: @%s\n", aid->di_name);
+			"undefined aggregation: @%s\n", aid->di_name);
 	}
 
 	ap = dt_stmt_action(dtp, sdp);
@@ -379,8 +383,8 @@ dt_action_normalize(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 	if ((denormal && argc != 1) || (!denormal && argc != 2)) {
 		dnerror(dnp, D_NORMALIZE_PROTO,
-		    "%s( ) prototype mismatch: %d args passed, %d expected\n",
-		    dnp->dn_ident->di_name, argc, denormal ? 1 : 2);
+			"%s( ) prototype mismatch: %d args passed, %d expected\n",
+			dnp->dn_ident->di_name, argc, denormal ? 1 : 2);
 	}
 
 	anp = dnp->dn_args;
@@ -388,23 +392,23 @@ dt_action_normalize(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 	if (anp->dn_kind != DT_NODE_AGG) {
 		dnerror(dnp, D_NORMALIZE_AGGARG,
-		    "%s( ) argument #1 is incompatible with prototype:\n"
-		    "\tprototype: aggregation\n\t argument: %s\n",
-		    dnp->dn_ident->di_name,
-		    dt_node_type_name(anp, n, sizeof (n)));
+			"%s( ) argument #1 is incompatible with prototype:\n"
+			"\tprototype: aggregation\n\t argument: %s\n",
+			dnp->dn_ident->di_name,
+			dt_node_type_name(anp, n, sizeof (n)));
 	}
 
 	if ((normal = anp->dn_list) != NULL && !dt_node_is_scalar(normal)) {
 		dnerror(dnp, D_NORMALIZE_SCALAR,
-		    "%s( ) argument #2 must be of scalar type\n",
-		    dnp->dn_ident->di_name);
+			"%s( ) argument #2 must be of scalar type\n",
+			dnp->dn_ident->di_name);
 	}
 
 	aid = anp->dn_ident;
 
 	if (aid->di_gen == dtp->dt_gen && !(aid->di_flags & DT_IDFLG_MOD)) {
 		dnerror(dnp, D_NORMALIZE_AGGBAD,
-		    "undefined aggregation: @%s\n", aid->di_name);
+			"undefined aggregation: @%s\n", aid->di_name);
 	}
 
 	ap = dt_stmt_action(dtp, sdp);
@@ -441,9 +445,9 @@ dt_action_trunc(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 	if (argc > 2 || argc < 1) {
 		dnerror(dnp, D_TRUNC_PROTO,
-		    "%s( ) prototype mismatch: %d args passed, %s expected\n",
-		    dnp->dn_ident->di_name, argc,
-		    argc < 1 ? "at least 1" : "no more than 2");
+			"%s( ) prototype mismatch: %d args passed, %s expected\n",
+			dnp->dn_ident->di_name, argc,
+			argc < 1 ? "at least 1" : "no more than 2");
 	}
 
 	anp = dnp->dn_args;
@@ -452,18 +456,18 @@ dt_action_trunc(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 	if (anp->dn_kind != DT_NODE_AGG) {
 		dnerror(dnp, D_TRUNC_AGGARG,
-		    "%s( ) argument #1 is incompatible with prototype:\n"
-		    "\tprototype: aggregation\n\t argument: %s\n",
-		    dnp->dn_ident->di_name,
-		    dt_node_type_name(anp, n, sizeof (n)));
+			"%s( ) argument #1 is incompatible with prototype:\n"
+			"\tprototype: aggregation\n\t argument: %s\n",
+			dnp->dn_ident->di_name,
+			dt_node_type_name(anp, n, sizeof (n)));
 	}
 
 	if (argc == 2) {
 		assert(trunc != NULL);
 		if (!dt_node_is_scalar(trunc)) {
 			dnerror(dnp, D_TRUNC_SCALAR,
-			    "%s( ) argument #2 must be of scalar type\n",
-			    dnp->dn_ident->di_name);
+				"%s( ) argument #2 must be of scalar type\n",
+				dnp->dn_ident->di_name);
 		}
 	}
 
@@ -471,7 +475,7 @@ dt_action_trunc(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 	if (aid->di_gen == dtp->dt_gen && !(aid->di_flags & DT_IDFLG_MOD)) {
 		dnerror(dnp, D_TRUNC_AGGBAD,
-		    "undefined aggregation: @%s\n", aid->di_name);
+			"undefined aggregation: @%s\n", aid->di_name);
 	}
 
 	ap = dt_stmt_action(dtp, sdp);
@@ -525,8 +529,8 @@ dt_action_printa(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 	if (argc < argr) {
 		dnerror(dnp, D_PRINTA_PROTO,
-		    "%s( ) prototype mismatch: %d args passed, %d expected\n",
-		    dnp->dn_ident->di_name, argc, argr);
+			"%s( ) prototype mismatch: %d args passed, %d expected\n",
+			dnp->dn_ident->di_name, argc, argr);
 	}
 
 	assert(anp != NULL);
@@ -534,19 +538,19 @@ dt_action_printa(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 	while (anp != NULL) {
 		if (anp->dn_kind != DT_NODE_AGG) {
 			dnerror(dnp, D_PRINTA_AGGARG,
-			    "%s( ) argument #%d is incompatible with "
-			    "prototype:\n\tprototype: aggregation\n"
-			    "\t argument: %s\n", dnp->dn_ident->di_name, argr,
-			    dt_node_type_name(anp, n, sizeof (n)));
+				"%s( ) argument #%d is incompatible with "
+				"prototype:\n\tprototype: aggregation\n"
+				"\t argument: %s\n", dnp->dn_ident->di_name, argr,
+				dt_node_type_name(anp, n, sizeof (n)));
 		}
 
 		aid = anp->dn_ident;
 		fid = aid->di_iarg;
 
 		if (aid->di_gen == dtp->dt_gen &&
-		    !(aid->di_flags & DT_IDFLG_MOD)) {
+			!(aid->di_flags & DT_IDFLG_MOD)) {
 			dnerror(dnp, D_PRINTA_AGGBAD,
-			    "undefined aggregation: @%s\n", aid->di_name);
+				"undefined aggregation: @%s\n", aid->di_name);
 		}
 
 		/*
@@ -563,10 +567,10 @@ dt_action_printa(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 			yylineno = dnp->dn_line;
 
 			sdp->dtsd_fmtdata =
-			    dt_printf_create(yypcb->pcb_hdl, format);
+				dt_printf_create(yypcb->pcb_hdl, format);
 			dt_printf_validate(sdp->dtsd_fmtdata,
-			    DT_PRINTF_AGGREGATION, dnp->dn_ident, 1,
-			    fid->di_id, ((dt_idsig_t *)aid->di_data)->dis_args);
+				DT_PRINTF_AGGREGATION, dnp->dn_ident, 1,
+				fid->di_id, ((dt_idsig_t *)aid->di_data)->dis_args);
 			format = NULL;
 		}
 
@@ -580,7 +584,7 @@ dt_action_printa(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 static void
 dt_action_printflike(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp,
-    dtrace_actkind_t kind)
+	dtrace_actkind_t kind)
 {
 	dt_node_t *anp, *arg1;
 	dtrace_actdesc_t *ap = NULL;
@@ -590,10 +594,10 @@ dt_action_printflike(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp,
 
 	if (dnp->dn_args->dn_kind != DT_NODE_STRING) {
 		dnerror(dnp, D_PRINTF_ARG_FMT,
-		    "%s( ) argument #1 is incompatible with prototype:\n"
-		    "\tprototype: string constant\n\t argument: %s\n",
-		    dnp->dn_ident->di_name,
-		    dt_node_type_name(dnp->dn_args, n, sizeof (n)));
+			"%s( ) argument #1 is incompatible with prototype:\n"
+			"\tprototype: string constant\n\t argument: %s\n",
+			dnp->dn_ident->di_name,
+			dt_node_type_name(dnp->dn_args, n, sizeof (n)));
 	}
 
 	arg1 = dnp->dn_args->dn_list;
@@ -620,8 +624,8 @@ dt_action_printflike(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp,
 			 * actually evaluated.
 			 */
 			dnerror(dnp, D_FREOPEN_INVALID,
-			    "%s( ) argument #1 cannot be \"%s\"\n",
-			    dnp->dn_ident->di_name, DT_FREOPEN_RESTORE);
+				"%s( ) argument #1 cannot be \"%s\"\n",
+				dnp->dn_ident->di_name, DT_FREOPEN_RESTORE);
 		}
 
 		if (str[0] == '\0')
@@ -631,14 +635,14 @@ dt_action_printflike(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp,
 	sdp->dtsd_fmtdata = dt_printf_create(dtp, str);
 
 	dt_printf_validate(sdp->dtsd_fmtdata, DT_PRINTF_EXACTLEN,
-	    dnp->dn_ident, 1, DTRACEACT_AGGREGATION, arg1);
+		dnp->dn_ident, 1, DTRACEACT_AGGREGATION, arg1);
 
 	if (arg1 == NULL) {
 		dif_instr_t *dbuf;
 		dtrace_difo_t *dp;
 
 		if ((dbuf = dt_alloc(dtp, sizeof (dif_instr_t))) == NULL ||
-		    (dp = dt_zalloc(dtp, sizeof (dtrace_difo_t))) == NULL) {
+			(dp = dt_zalloc(dtp, sizeof (dtrace_difo_t))) == NULL) {
 			dt_free(dtp, dbuf);
 			longjmp(yypcb->pcb_jmpbuf, EDT_NOMEM);
 		}
@@ -674,18 +678,18 @@ dt_action_trace(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 	if (dt_node_is_void(dnp->dn_args)) {
 		dnerror(dnp->dn_args, istrace ? D_TRACE_VOID : D_PRINT_VOID,
-		    "%s( ) may not be applied to a void expression\n", act);
+			"%s( ) may not be applied to a void expression\n", act);
 	}
 
 	if (dt_node_resolve(dnp->dn_args, DT_IDENT_XLPTR) != NULL) {
 		dnerror(dnp->dn_args, istrace ? D_TRACE_DYN : D_PRINT_DYN,
-		    "%s( ) may not be applied to a translated pointer\n", act);
+			"%s( ) may not be applied to a translated pointer\n", act);
 	}
 
 	if (dnp->dn_args->dn_kind == DT_NODE_AGG) {
 		dnerror(dnp->dn_args, istrace ? D_TRACE_AGG : D_PRINT_AGG,
-		    "%s( ) may not be applied to an aggregation%s\n", act,
-		    istrace ? "" : " -- did you mean printa()?");
+			"%s( ) may not be applied to an aggregation%s\n", act,
+			istrace ? "" : " -- did you mean printa()?");
 	}
 
 	dt_cg(yypcb, dnp->dn_args);
@@ -717,22 +721,22 @@ dt_action_trace(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 			ctflib = dt_module_getlibid(dtp, dmp, dret->dn_ctfp);
 			assert(ctflib >= 0);
 			n = snprintf(NULL, 0, "%s`%d`%ld", dmp->dm_name,
-			    ctflib, dret->dn_type) + 1;
+				ctflib, dret->dn_type) + 1;
 		} else {
 			n = snprintf(NULL, 0, "%s`%ld", dmp->dm_name,
-			    dret->dn_type) + 1;
+				dret->dn_type) + 1;
 		}
 		sdp->dtsd_strdata = dt_alloc(dtp, n);
 		if (sdp->dtsd_strdata == NULL)
 			longjmp(yypcb->pcb_jmpbuf, EDT_NOMEM);
 		(void) snprintf(sdp->dtsd_strdata, n, "%s`%ld", dmp->dm_name,
-		    dret->dn_type);
+			dret->dn_type);
 		if (dmp->dm_pid != 0) {
 			(void) snprintf(sdp->dtsd_strdata, n, "%s`%d`%ld",
-			    dmp->dm_name, ctflib, dret->dn_type);
+				dmp->dm_name, ctflib, dret->dn_type);
 		} else {
 			(void) snprintf(sdp->dtsd_strdata, n, "%s`%ld",
-			    dmp->dm_name, dret->dn_type);
+				dmp->dm_name, dret->dn_type);
 		}
 	}
 
@@ -753,27 +757,27 @@ dt_action_tracemem(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 	if (dt_node_is_integer(addr) == 0 && dt_node_is_pointer(addr) == 0) {
 		dnerror(addr, D_TRACEMEM_ADDR,
-		    "tracemem( ) argument #1 is incompatible with "
-		    "prototype:\n\tprototype: pointer or integer\n"
-		    "\t argument: %s\n",
-		    dt_node_type_name(addr, n, sizeof (n)));
+			"tracemem( ) argument #1 is incompatible with "
+			"prototype:\n\tprototype: pointer or integer\n"
+			"\t argument: %s\n",
+			dt_node_type_name(addr, n, sizeof (n)));
 	}
 
 	if (dt_node_is_posconst(max) == 0) {
 		dnerror(max, D_TRACEMEM_SIZE, "tracemem( ) argument #2 must "
-		    "be a non-zero positive integral constant expression\n");
+			"be a non-zero positive integral constant expression\n");
 	}
 
 	if ((size = max->dn_list) != NULL) {
 		if (size->dn_list != NULL) {
 			dnerror(size, D_TRACEMEM_ARGS, "tracemem ( ) prototype "
-			    "mismatch: expected at most 3 args\n");
+				"mismatch: expected at most 3 args\n");
 		}
 
 		if (!dt_node_is_scalar(size)) {
 			dnerror(size, D_TRACEMEM_DYNSIZE, "tracemem ( ) "
-			    "dynamic size (argument #3) must be of "
-			    "scalar type\n");
+				"dynamic size (argument #3) must be of "
+				"scalar type\n");
 		}
 
 		dt_cg(yypcb, size);
@@ -806,12 +810,12 @@ dt_action_stack_args(dtrace_hdl_t *dtp, dtrace_actdesc_t *ap, dt_node_t *arg0)
 	if (arg0 != NULL) {
 		if (arg0->dn_list != NULL) {
 			dnerror(arg0, D_STACK_PROTO, "stack( ) prototype "
-			    "mismatch: too many arguments\n");
+				"mismatch: too many arguments\n");
 		}
 
 		if (dt_node_is_posconst(arg0) == 0) {
 			dnerror(arg0, D_STACK_SIZE, "stack( ) size must be a "
-			    "non-zero positive integral constant expression\n");
+				"non-zero positive integral constant expression\n");
 		}
 
 		ap->dtad_arg = arg0->dn_value;
@@ -834,7 +838,7 @@ dt_action_ustack_args(dtrace_hdl_t *dtp, dtrace_actdesc_t *ap, dt_node_t *dnp)
 	dt_node_t *arg1 = arg0 != NULL ? arg0->dn_list : NULL;
 
 	assert(dnp->dn_ident->di_id == DT_ACT_JSTACK ||
-	    dnp->dn_ident->di_id == DT_ACT_USTACK);
+		dnp->dn_ident->di_id == DT_ACT_USTACK);
 
 	if (dnp->dn_ident->di_id == DT_ACT_JSTACK) {
 		if (dtp->dt_options[DTRACEOPT_JSTACKFRAMES] != DTRACEOPT_UNSET)
@@ -856,22 +860,22 @@ dt_action_ustack_args(dtrace_hdl_t *dtp, dtrace_actdesc_t *ap, dt_node_t *dnp)
 	if (arg0 != NULL) {
 		if (!dt_node_is_posconst(arg0)) {
 			dnerror(arg0, D_USTACK_FRAMES, "ustack( ) argument #1 "
-			    "must be a non-zero positive integer constant\n");
+				"must be a non-zero positive integer constant\n");
 		}
 		nframes = (uint32_t)arg0->dn_value;
 	}
 
 	if (arg1 != NULL) {
 		if (arg1->dn_kind != DT_NODE_INT ||
-		    ((arg1->dn_flags & DT_NF_SIGNED) &&
-		    (int64_t)arg1->dn_value < 0)) {
+			((arg1->dn_flags & DT_NF_SIGNED) &&
+			(int64_t)arg1->dn_value < 0)) {
 			dnerror(arg1, D_USTACK_STRSIZE, "ustack( ) argument #2 "
-			    "must be a positive integer constant\n");
+				"must be a positive integer constant\n");
 		}
 
 		if (arg1->dn_list != NULL) {
 			dnerror(arg1, D_USTACK_PROTO, "ustack( ) prototype "
-			    "mismatch: too many arguments\n");
+				"mismatch: too many arguments\n");
 		}
 
 		strsize = (uint32_t)arg1->dn_value;
@@ -922,11 +926,11 @@ dt_action_setopt(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 /*ARGSUSED*/
 static void
 dt_action_symmod_args(dtrace_hdl_t *dtp, dtrace_actdesc_t *ap,
-    dt_node_t *dnp, dtrace_actkind_t kind)
+	dt_node_t *dnp, dtrace_actkind_t kind)
 {
 	assert(kind == DTRACEACT_SYM || kind == DTRACEACT_MOD ||
-	    kind == DTRACEACT_USYM || kind == DTRACEACT_UMOD ||
-	    kind == DTRACEACT_UADDR);
+		kind == DTRACEACT_USYM || kind == DTRACEACT_UMOD ||
+		kind == DTRACEACT_UADDR);
 
 	dt_cg(yypcb, dnp);
 	ap->dtad_difo = dt_as(yypcb);
@@ -936,7 +940,7 @@ dt_action_symmod_args(dtrace_hdl_t *dtp, dtrace_actdesc_t *ap,
 
 static void
 dt_action_symmod(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp,
-    dtrace_actkind_t kind)
+	dtrace_actkind_t kind)
 {
 	dtrace_actdesc_t *ap = dt_stmt_action(dtp, sdp);
 	dt_action_symmod_args(dtp, ap, dnp->dn_args, kind);
@@ -947,6 +951,7 @@ static void
 dt_action_ftruncate(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 {
 	dtrace_actdesc_t *ap = dt_stmt_action(dtp, sdp);
+
 
 	/*
 	 * Library actions need a DIFO that serves as an argument.  As
@@ -1041,15 +1046,15 @@ dt_action_printm(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 	if (dt_node_is_posconst(size) == 0) {
 		dnerror(size, D_PRINTM_SIZE, "printm( ) argument #1 must "
-		    "be a non-zero positive integral constant expression\n");
+			"be a non-zero positive integral constant expression\n");
 	}
 
 	if (dt_node_is_pointer(addr) == 0) {
 		dnerror(addr, D_PRINTM_ADDR,
-		    "printm( ) argument #2 is incompatible with "
-		    "prototype:\n\tprototype: pointer\n"
-		    "\t argument: %s\n",
-		    dt_node_type_name(addr, n, sizeof (n)));
+			"printm( ) argument #2 is incompatible with "
+			"prototype:\n\tprototype: pointer\n"
+			"\t argument: %s\n",
+			dt_node_type_name(addr, n, sizeof (n)));
 	}
 
 	dt_cg(yypcb, addr);
@@ -1079,6 +1084,60 @@ dt_action_discard(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 	ap->dtad_difo = dt_as(yypcb);
 	ap->dtad_kind = DTRACEACT_DISCARD;
 }
+
+#ifdef _WIN32
+
+static void
+dt_action_etw_trace(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
+{
+	dt_node_t *anp;
+	for (anp = dnp->dn_args; anp != NULL; anp = anp->dn_list) {
+		if (anp->dn_kind == DT_NODE_AGG) {
+			dnerror(anp, D_ETW_TRACE_NOT_AGG,
+				"%s( ) may not be applied to an aggregation "
+				"-- consider using printa()\n",
+				dnp->dn_ident->di_name);
+		}
+	}
+
+	dt_etw_trace_desc_t *etw_trace = dt_etw_trace_create(dtp, dnp);
+	dt_etw_trace_validate(etw_trace);
+	sdp->dtsd_etwtrace = etw_trace;
+
+	int common_args_count = etw_trace->det_provider_group_guid_length == 0 ||
+		etw_trace->det_provider_group_guid == NULL ?
+			DT_ETW_TRACE_COMMON_ARGS_COUNT :
+			DT_ETW_TRACE_COMMON_ARGS_COUNT_WITH_GROUP;
+
+	/*
+	 * Only the payload value nodes will be compiled to DIFO.
+	 * The etw trace descriptor is stored in dtsd_etwtrace, and there's
+	 * no need to duplicate the data that has already been preserved there.
+	 */
+
+	int i;
+	for (anp = dnp->dn_args, i = 0; anp != NULL; anp = anp->dn_list, i++) {
+		if ((i >= (common_args_count)) && ((i - common_args_count + 1) %
+			DT_ETW_TRACE_PAYLOAD_TUPLE_COUNT) == 0) {
+			dtrace_actdesc_t *ap = dt_stmt_action(dtp, sdp);
+			dt_cg(yypcb, anp);
+			ap->dtad_difo = dt_as(yypcb);
+			ap->dtad_kind = DTRACEACT_ETWTRACE;
+		}
+	}
+}
+
+static void
+dt_action_lkd(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
+{
+	dtrace_actdesc_t *ap = dt_stmt_action(dtp, sdp);
+
+	dt_cg(yypcb, dnp->dn_args);
+	ap->dtad_difo = dt_as(yypcb);
+	ap->dtad_kind = DTRACEACT_LKD;
+}
+
+#endif
 
 static void
 dt_compile_fun(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
@@ -1175,9 +1234,17 @@ dt_compile_fun(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 	case DT_ACT_JSTACK:
 		dt_action_ustack(dtp, dnp->dn_expr, sdp);
 		break;
+#ifdef _WIN32
+	case DT_ACT_ETW_TRACE:
+		dt_action_etw_trace(dtp, dnp->dn_expr, sdp);
+		break;
+	case DT_ACT_LKD:
+		dt_action_lkd(dtp, dnp->dn_expr, sdp);
+		break;
+#endif
 	default:
 		dnerror(dnp->dn_expr, D_UNKNOWN, "tracing function %s( ) is "
-		    "not yet supported\n", dnp->dn_expr->dn_ident->di_name);
+			"not yet supported\n", dnp->dn_expr->dn_ident->di_name);
 	}
 }
 
@@ -1207,16 +1274,16 @@ dt_compile_agg(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 	 */
 	if (dnp->dn_aggfun == NULL) {
 		dnerror(dnp, D_AGG_NULL, "expression has null effect: @%s\n",
-		    dnp->dn_ident->di_name);
+			dnp->dn_ident->di_name);
 	}
 
 	aid = dnp->dn_ident;
 	fid = dnp->dn_aggfun->dn_ident;
 
 	if (dnp->dn_aggfun->dn_args != NULL &&
-	    dt_node_is_scalar(dnp->dn_aggfun->dn_args) == 0) {
+		dt_node_is_scalar(dnp->dn_aggfun->dn_args) == 0) {
 		dnerror(dnp->dn_aggfun, D_AGG_SCALAR, "%s( ) argument #1 must "
-		    "be of scalar type\n", fid->di_name);
+			"be of scalar type\n", fid->di_name);
 	}
 
 	/*
@@ -1237,7 +1304,7 @@ dt_compile_agg(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 			}
 
 			if (anp->dn_ident->di_id == DT_ACT_USTACK ||
-			    anp->dn_ident->di_id == DT_ACT_JSTACK) {
+				anp->dn_ident->di_id == DT_ACT_JSTACK) {
 				dt_action_ustack_args(dtp, ap, anp);
 				continue;
 			}
@@ -1245,27 +1312,27 @@ dt_compile_agg(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 			switch (anp->dn_ident->di_id) {
 			case DT_ACT_UADDR:
 				dt_action_symmod_args(dtp, ap,
-				    anp->dn_args, DTRACEACT_UADDR);
+					anp->dn_args, DTRACEACT_UADDR);
 				continue;
 
 			case DT_ACT_USYM:
 				dt_action_symmod_args(dtp, ap,
-				    anp->dn_args, DTRACEACT_USYM);
+					anp->dn_args, DTRACEACT_USYM);
 				continue;
 
 			case DT_ACT_UMOD:
 				dt_action_symmod_args(dtp, ap,
-				    anp->dn_args, DTRACEACT_UMOD);
+					anp->dn_args, DTRACEACT_UMOD);
 				continue;
 
 			case DT_ACT_SYM:
 				dt_action_symmod_args(dtp, ap,
-				    anp->dn_args, DTRACEACT_SYM);
+					anp->dn_args, DTRACEACT_SYM);
 				continue;
 
 			case DT_ACT_MOD:
 				dt_action_symmod_args(dtp, ap,
-				    anp->dn_args, DTRACEACT_MOD);
+					anp->dn_args, DTRACEACT_MOD);
 				continue;
 
 			default:
@@ -1297,44 +1364,44 @@ dt_compile_agg(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 		if (arg1->dn_kind != DT_NODE_INT) {
 			dnerror(arg1, D_LQUANT_BASETYPE, "lquantize( ) "
-			    "argument #1 must be an integer constant\n");
+				"argument #1 must be an integer constant\n");
 		}
 
 		baseval = (int64_t)arg1->dn_value;
 
 		if (baseval < INT32_MIN || baseval > INT32_MAX) {
 			dnerror(arg1, D_LQUANT_BASEVAL, "lquantize( ) "
-			    "argument #1 must be a 32-bit quantity\n");
+				"argument #1 must be a 32-bit quantity\n");
 		}
 
 		if (arg2->dn_kind != DT_NODE_INT) {
 			dnerror(arg2, D_LQUANT_LIMTYPE, "lquantize( ) "
-			    "argument #2 must be an integer constant\n");
+				"argument #2 must be an integer constant\n");
 		}
 
 		limitval = (int64_t)arg2->dn_value;
 
 		if (limitval < INT32_MIN || limitval > INT32_MAX) {
 			dnerror(arg2, D_LQUANT_LIMVAL, "lquantize( ) "
-			    "argument #2 must be a 32-bit quantity\n");
+				"argument #2 must be a 32-bit quantity\n");
 		}
 
 		if (limitval < baseval) {
 			dnerror(dnp, D_LQUANT_MISMATCH,
-			    "lquantize( ) base (argument #1) must be less "
-			    "than limit (argument #2)\n");
+				"lquantize( ) base (argument #1) must be less "
+				"than limit (argument #2)\n");
 		}
 
 		if (arg3 != NULL) {
 			if (!dt_node_is_posconst(arg3)) {
 				dnerror(arg3, D_LQUANT_STEPTYPE, "lquantize( ) "
-				    "argument #3 must be a non-zero positive "
-				    "integer constant\n");
+					"argument #3 must be a non-zero positive "
+					"integer constant\n");
 			}
 
 			if ((step = arg3->dn_value) > UINT16_MAX) {
 				dnerror(arg3, D_LQUANT_STEPVAL, "lquantize( ) "
-				    "argument #3 must be a 16-bit quantity\n");
+					"argument #3 must be a 16-bit quantity\n");
 			}
 		}
 
@@ -1342,20 +1409,20 @@ dt_compile_agg(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 		if (nlevels == 0) {
 			dnerror(dnp, D_LQUANT_STEPLARGE,
-			    "lquantize( ) step (argument #3) too large: must "
-			    "have at least one quantization level\n");
+				"lquantize( ) step (argument #3) too large: must "
+				"have at least one quantization level\n");
 		}
 
 		if (nlevels > UINT16_MAX) {
 			dnerror(dnp, D_LQUANT_STEPSMALL, "lquantize( ) step "
-			    "(argument #3) too small: number of quantization "
-			    "levels must be a 16-bit quantity\n");
+				"(argument #3) too small: number of quantization "
+				"levels must be a 16-bit quantity\n");
 		}
 
 		arg = (step << DTRACE_LQUANTIZE_STEPSHIFT) |
-		    (nlevels << DTRACE_LQUANTIZE_LEVELSHIFT) |
-		    ((baseval << DTRACE_LQUANTIZE_BASESHIFT) &
-		    DTRACE_LQUANTIZE_BASEMASK);
+			(nlevels << DTRACE_LQUANTIZE_LEVELSHIFT) |
+			((baseval << DTRACE_LQUANTIZE_BASESHIFT) &
+			DTRACE_LQUANTIZE_BASEMASK);
 
 		assert(arg != 0);
 
@@ -1381,24 +1448,24 @@ dt_compile_agg(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 			if (obaseval != baseval) {
 				dnerror(dnp, D_LQUANT_MATCHBASE, "lquantize( ) "
-				    "base (argument #1) doesn't match previous "
-				    "declaration: expected %d, found %d\n",
-				    obaseval, (int)baseval);
+					"base (argument #1) doesn't match previous "
+					"declaration: expected %d, found %d\n",
+					obaseval, (int)baseval);
 			}
 
 			if (onlevels * ostep != nlevels * step) {
 				dnerror(dnp, D_LQUANT_MATCHLIM, "lquantize( ) "
-				    "limit (argument #2) doesn't match previous"
-				    " declaration: expected %d, found %d\n",
-				    obaseval + onlevels * ostep,
-				    (int)baseval + (int)nlevels * (int)step);
+					"limit (argument #2) doesn't match previous"
+					" declaration: expected %d, found %d\n",
+					obaseval + onlevels * ostep,
+					(int)baseval + (int)nlevels * (int)step);
 			}
 
 			if (ostep != step) {
 				dnerror(dnp, D_LQUANT_MATCHSTEP, "lquantize( ) "
-				    "step (argument #3) doesn't match previous "
-				    "declaration: expected %d, found %d\n",
-				    ostep, (int)step);
+					"step (argument #3) doesn't match previous "
+					"declaration: expected %d, found %d\n",
+					ostep, (int)step);
 			}
 
 			/*
@@ -1438,17 +1505,17 @@ dt_compile_agg(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 			uint16_t value;		/* value itself */
 		} args[] = {
 			{ "factor", D_LLQUANT_FACTORTYPE,
-			    D_LLQUANT_FACTORVAL, D_LLQUANT_FACTORMATCH,
-			    DTRACE_LLQUANTIZE_FACTORSHIFT },
+				D_LLQUANT_FACTORVAL, D_LLQUANT_FACTORMATCH,
+				DTRACE_LLQUANTIZE_FACTORSHIFT },
 			{ "low magnitude", D_LLQUANT_LOWTYPE,
-			    D_LLQUANT_LOWVAL, D_LLQUANT_LOWMATCH,
-			    DTRACE_LLQUANTIZE_LOWSHIFT },
+				D_LLQUANT_LOWVAL, D_LLQUANT_LOWMATCH,
+				DTRACE_LLQUANTIZE_LOWSHIFT },
 			{ "high magnitude", D_LLQUANT_HIGHTYPE,
-			    D_LLQUANT_HIGHVAL, D_LLQUANT_HIGHMATCH,
-			    DTRACE_LLQUANTIZE_HIGHSHIFT },
+				D_LLQUANT_HIGHVAL, D_LLQUANT_HIGHMATCH,
+				DTRACE_LLQUANTIZE_HIGHSHIFT },
 			{ "linear steps per magnitude", D_LLQUANT_NSTEPTYPE,
-			    D_LLQUANT_NSTEPVAL, D_LLQUANT_NSTEPMATCH,
-			    DTRACE_LLQUANTIZE_NSTEPSHIFT },
+				D_LLQUANT_NSTEPVAL, D_LLQUANT_NSTEPMATCH,
+				DTRACE_LLQUANTIZE_NSTEPSHIFT },
 			{ NULL }
 		};
 
@@ -1457,20 +1524,20 @@ dt_compile_agg(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 		for (i = 0; args[i].str != NULL; i++) {
 			if (llarg->dn_kind != DT_NODE_INT) {
 				dnerror(llarg, args[i].badtype, "llquantize( ) "
-				    "argument #%d (%s) must be an "
-				    "integer constant\n", i + 1, args[i].str);
+					"argument #%d (%s) must be an "
+					"integer constant\n", i + 1, args[i].str);
 			}
 
 			if ((uint64_t)llarg->dn_value > UINT16_MAX) {
 				dnerror(llarg, args[i].badval, "llquantize( ) "
-				    "argument #%d (%s) must be an unsigned "
-				    "16-bit quantity\n", i + 1, args[i].str);
+					"argument #%d (%s) must be an unsigned "
+					"16-bit quantity\n", i + 1, args[i].str);
 			}
 
 			args[i].value = (uint16_t)llarg->dn_value;
 
 			assert(!(arg & ((uint64_t)UINT16_MAX <<
-			    args[i].shift)));
+				args[i].shift)));
 			arg |= ((uint64_t)args[i].value << args[i].shift);
 			llarg = llarg->dn_list;
 		}
@@ -1479,20 +1546,20 @@ dt_compile_agg(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 		if (args[0].value < 2) {
 			dnerror(dnp, D_LLQUANT_FACTORSMALL, "llquantize( ) "
-			    "factor (argument #1) must be two or more\n");
+				"factor (argument #1) must be two or more\n");
 		}
 
 		if (args[1].value >= args[2].value) {
 			dnerror(dnp, D_LLQUANT_MAGRANGE, "llquantize( ) "
-			    "high magnitude (argument #3) must be greater "
-			    "than low magnitude (argument #2)\n");
+				"high magnitude (argument #3) must be greater "
+				"than low magnitude (argument #2)\n");
 		}
 
 		if (args[3].value < args[0].value) {
 			dnerror(dnp, D_LLQUANT_FACTORNSTEPS, "llquantize( ) "
-			    "factor (argument #1) must be less than or "
-			    "equal to the number of linear steps per "
-			    "magnitude (argument #4)\n");
+				"factor (argument #1) must be less than or "
+				"equal to the number of linear steps per "
+				"magnitude (argument #4)\n");
 		}
 
 		for (v = args[0].value; v < args[3].value; v *= args[0].value)
@@ -1500,10 +1567,10 @@ dt_compile_agg(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 
 		if ((args[3].value % args[0].value) || (v % args[3].value)) {
 			dnerror(dnp, D_LLQUANT_FACTOREVEN, "llquantize( ) "
-			    "factor (argument #1) must evenly divide the "
-			    "number of steps per magnitude (argument #4), "
-			    "and the number of steps per magnitude must evenly "
-			    "divide a power of the factor\n");
+				"factor (argument #1) must evenly divide the "
+				"number of steps per magnitude (argument #4), "
+				"and the number of steps per magnitude must evenly "
+				"divide a power of the factor\n");
 		}
 
 		for (i = 0, order = 1; i <= args[2].value + 1; i++) {
@@ -1513,9 +1580,9 @@ dt_compile_agg(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 			}
 
 			dnerror(dnp, D_LLQUANT_MAGTOOBIG, "llquantize( ) "
-			    "factor (%d) raised to power of high magnitude "
-			    "(%d) plus 1 overflows 64-bits\n", args[0].value,
-			    args[2].value);
+				"factor (%d) raised to power of high magnitude "
+				"(%d) plus 1 overflows 64-bits\n", args[0].value,
+				args[2].value);
 		}
 
 		isp = (dt_idsig_t *)aid->di_data;
@@ -1544,9 +1611,9 @@ dt_compile_agg(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 			}
 
 			dnerror(dnp, args[i - 1].mismatch, "llquantize( ) "
-			    "%s (argument #%d) doesn't match previous "
-			    "declaration: expected %d, found %d\n",
-			    args[i - 1].str, i, expected, found);
+				"%s (argument #%d) doesn't match previous "
+				"declaration: expected %d, found %d\n",
+				args[i - 1].str, i, expected, found);
 		}
 
 		incr = llarg;
@@ -1561,8 +1628,8 @@ dt_compile_agg(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 	if (incr != NULL) {
 		if (!dt_node_is_scalar(incr)) {
 			dnerror(dnp, D_PROTO_ARG, "%s( ) increment value "
-			    "(argument #%d) must be of scalar type\n",
-			    fid->di_name, argmax);
+				"(argument #%d) must be of scalar type\n",
+				fid->di_name, argmax);
 		}
 
 		if ((anp = incr->dn_list) != NULL) {
@@ -1572,8 +1639,8 @@ dt_compile_agg(dtrace_hdl_t *dtp, dt_node_t *dnp, dtrace_stmtdesc_t *sdp)
 				argc++;
 
 			dnerror(incr, D_PROTO_LEN, "%s( ) prototype "
-			    "mismatch: %d args passed, at most %d expected",
-			    fid->di_name, argc, argmax);
+				"mismatch: %d args passed, at most %d expected",
+				fid->di_name, argc, argmax);
 		}
 
 		ap = dt_stmt_action(dtp, sdp);
@@ -1628,7 +1695,7 @@ dt_compile_one_clause(dtrace_hdl_t *dtp, dt_node_t *cnp, dt_node_t *pnp)
 
 	if (cnp->dn_acts == NULL) {
 		dt_stmt_append(dt_stmt_create(dtp, edp,
-		    cnp->dn_ctxattr, _dtrace_defattr), cnp);
+			cnp->dn_ctxattr, _dtrace_defattr), cnp);
 	}
 
 	for (dnp = cnp->dn_acts; dnp != NULL; dnp = dnp->dn_list) {
@@ -1650,7 +1717,7 @@ dt_compile_one_clause(dtrace_hdl_t *dtp, dt_node_t *cnp, dt_node_t *pnp)
 			break;
 		default:
 			dnerror(dnp, D_UNKNOWN, "internal error -- node kind "
-			    "%u is not a valid statement\n", dnp->dn_kind);
+				"%u is not a valid statement\n", dnp->dn_kind);
 		}
 
 		assert(yypcb->pcb_stmt == sdp);
@@ -1708,9 +1775,9 @@ dt_setcontext(dtrace_hdl_t *dtp, dtrace_probedesc_t *pdp)
 	 * and tag -- we just have to longjmp() out of here.
 	 */
 	if (isdigit(pdp->dtpd_provider[strlen(pdp->dtpd_provider) - 1]) &&
-	    ((pvp = dt_provider_lookup(dtp, pdp->dtpd_provider)) == NULL ||
-	    pvp->pv_desc.dtvd_priv.dtpp_flags & DTRACE_PRIV_PROC) &&
-	    dt_pid_create_probes(pdp, dtp, yypcb) != 0) {
+		((pvp = dt_provider_lookup(dtp, pdp->dtpd_provider)) == NULL ||
+		pvp->pv_desc.dtvd_priv.dtpp_flags & DTRACE_PRIV_PROC) &&
+		dt_pid_create_probes(pdp, dtp, yypcb) != 0) {
 		longjmp(yypcb->pcb_jmpbuf, EDT_COMPILER);
 	}
 
@@ -1732,17 +1799,17 @@ dt_setcontext(dtrace_hdl_t *dtp, dtrace_probedesc_t *pdp)
 
 	if (err == EDT_NOPROBE && !(yypcb->pcb_cflags & DTRACE_C_ZDEFS)) {
 		xyerror(D_PDESC_ZERO, "probe description %s:%s:%s:%s does not "
-		    "match any probes\n", pdp->dtpd_provider, pdp->dtpd_mod,
-		    pdp->dtpd_func, pdp->dtpd_name);
+			"match any probes\n", pdp->dtpd_provider, pdp->dtpd_mod,
+			pdp->dtpd_func, pdp->dtpd_name);
 	}
 
 	if (err != EDT_NOPROBE && err != EDT_UNSTABLE && err != 0)
 		xyerror(D_PDESC_INVAL, "%s\n", dtrace_errmsg(dtp, err));
 
 	dt_dprintf("set context to %s:%s:%s:%s [%u] prp=%p attr=%s argc=%d\n",
-	    pdp->dtpd_provider, pdp->dtpd_mod, pdp->dtpd_func, pdp->dtpd_name,
-	    pdp->dtpd_id, (void *)prp, dt_attr_str(yypcb->pcb_pinfo.dtp_attr,
-	    attrstr, sizeof (attrstr)), yypcb->pcb_pinfo.dtp_argc);
+		pdp->dtpd_provider, pdp->dtpd_mod, pdp->dtpd_func, pdp->dtpd_name,
+		pdp->dtpd_id, (void *)prp, dt_attr_str(yypcb->pcb_pinfo.dtp_attr,
+		attrstr, sizeof (attrstr)), yypcb->pcb_pinfo.dtp_argc);
 
 	/*
 	 * Reset the stability attributes of D global variables that vary
@@ -1817,14 +1884,14 @@ dt_reduce(dtrace_hdl_t *dtp, dt_version_t v)
 		return (0); /* no reduction necessary */
 
 	dt_dprintf("reducing api version to %s\n",
-	    dt_version_num2str(v, s, sizeof (s)));
+		dt_version_num2str(v, s, sizeof (s)));
 
 	dtp->dt_vmax = v;
 
 	for (dxp = dt_list_next(&dtp->dt_xlators); dxp != NULL; dxp = nxp) {
 		nxp = dt_list_next(dxp);
 		if ((dxp->dx_souid.di_vers != 0 && dxp->dx_souid.di_vers > v) ||
-		    (dxp->dx_ptrid.di_vers != 0 && dxp->dx_ptrid.di_vers > v))
+			(dxp->dx_ptrid.di_vers != 0 && dxp->dx_ptrid.di_vers > v))
 			dt_list_delete(&dtp->dt_xlators, dxp);
 	}
 
@@ -1901,7 +1968,7 @@ dt_preproc(dtrace_hdl_t *dtp, FILE *ifp)
 	bcopy(dtp->dt_cpp_argv, argv, sizeof (char *) * argc);
 
 	(void) snprintf(verdef, sizeof (verdef),
-	    "-D__SUNW_D_VERSION=0x%08x", dtp->dt_vmax);
+		"-D__SUNW_D_VERSION=0x%08x", dtp->dt_vmax);
 	argv[argc++] = verdef;
 
 #ifdef illumos
@@ -1958,7 +2025,7 @@ dt_preproc(dtrace_hdl_t *dtp, FILE *ifp)
 
 	do {
 		dt_dprintf("waiting for %s (PID %d)\n", dtp->dt_cpp_path,
-		    (int)pid);
+			(int)pid);
 	} while (waitpid(pid, &wstat, 0) == -1 && errno == EINTR);
 
 	(void) sigaction(SIGCHLD, &oact, NULL);
@@ -2039,7 +2106,7 @@ dt_lib_depend_lookup(dt_list_t *dld, const char *arg)
 	dt_lib_depend_t *dldn;
 
 	for (dldn = dt_list_next(dld); dldn != NULL;
-	    dldn = dt_list_next(dldn)) {
+		dldn = dt_list_next(dldn)) {
 		if (strcmp(dldn->dtld_library, arg) == 0)
 			return (dldn);
 	}
@@ -2059,24 +2126,24 @@ dt_lib_build_graph(dtrace_hdl_t *dtp)
 	dt_lib_depend_t *dld, *dpld;
 
 	for (dld = dt_list_next(&dtp->dt_lib_dep); dld != NULL;
-	    dld = dt_list_next(dld)) {
+		dld = dt_list_next(dld)) {
 		char *library = dld->dtld_library;
 
 		for (dpld = dt_list_next(&dld->dtld_dependencies); dpld != NULL;
-		    dpld = dt_list_next(dpld)) {
+			dpld = dt_list_next(dpld)) {
 			dt_lib_depend_t *dlda;
 
 			if ((dlda = dt_lib_depend_lookup(&dtp->dt_lib_dep,
-			    dpld->dtld_library)) == NULL) {
+				dpld->dtld_library)) == NULL) {
 				dt_lib_depend_error(dtp,
-				    "Invalid library dependency in %s: %s\n",
-				    dld->dtld_library, dpld->dtld_library);
+					"Invalid library dependency in %s: %s\n",
+					dld->dtld_library, dpld->dtld_library);
 
 				return (dt_set_errno(dtp, EDT_COMPILER));
 			}
 
 			if ((dt_lib_depend_add(dtp, &dlda->dtld_dependents,
-			    library)) != 0) {
+				library)) != 0) {
 				return (-1); /* preserve dt_errno */
 			}
 		}
@@ -2092,13 +2159,13 @@ dt_topo_sort(dtrace_hdl_t *dtp, dt_lib_depend_t *dld, int *count)
 	dld->dtld_start = ++(*count);
 
 	for (dpld = dt_list_next(&dld->dtld_dependents); dpld != NULL;
-	    dpld = dt_list_next(dpld)) {
+		dpld = dt_list_next(dpld)) {
 		dlda = dt_lib_depend_lookup(&dtp->dt_lib_dep,
-		    dpld->dtld_library);
+			dpld->dtld_library);
 		assert(dlda != NULL);
 
 		if (dlda->dtld_start == 0 &&
-		    dt_topo_sort(dtp, dlda, count) == -1)
+			dt_topo_sort(dtp, dlda, count) == -1)
 			return (-1);
 	}
 
@@ -2115,7 +2182,7 @@ dt_topo_sort(dtrace_hdl_t *dtp, dt_lib_depend_t *dld, int *count)
 	dt_list_prepend(&dtp->dt_lib_dep_sorted, new);
 
 	dt_dprintf("library %s sorted (%d/%d)\n", new->dtld_library,
-	    new->dtld_start, new->dtld_finish);
+		new->dtld_start, new->dtld_finish);
 
 	return (0);
 }
@@ -2135,9 +2202,9 @@ dt_lib_depend_sort(dtrace_hdl_t *dtp)
 	 * dependency ordered list located at dtp->dt_lib_dep_sorted.
 	 */
 	for (dld = dt_list_next(&dtp->dt_lib_dep); dld != NULL;
-	    dld = dt_list_next(dld)) {
+		dld = dt_list_next(dld)) {
 		if (dld->dtld_start == 0 &&
-		    dt_topo_sort(dtp, dld, &count) == -1)
+			dt_topo_sort(dtp, dld, &count) == -1)
 			return (-1); /* preserve dt_errno */;
 	}
 
@@ -2147,17 +2214,17 @@ dt_lib_depend_sort(dtrace_hdl_t *dtp)
 	 * exists in the graph and this is a cycle.
 	 */
 	for (dld = dt_list_next(&dtp->dt_lib_dep); dld != NULL;
-	    dld = dt_list_next(dld)) {
+		dld = dt_list_next(dld)) {
 		for (dpld = dt_list_next(&dld->dtld_dependents); dpld != NULL;
-		    dpld = dt_list_next(dpld)) {
+			dpld = dt_list_next(dpld)) {
 			dlda = dt_lib_depend_lookup(&dtp->dt_lib_dep_sorted,
-			    dpld->dtld_library);
+				dpld->dtld_library);
 			assert(dlda != NULL);
 
 			if (dlda->dtld_finish > dld->dtld_finish) {
 				dt_lib_depend_error(dtp,
-				    "Cyclic dependency detected: %s => %s\n",
-				    dld->dtld_library, dpld->dtld_library);
+					"Cyclic dependency detected: %s => %s\n",
+					dld->dtld_library, dpld->dtld_library);
 
 				return (dt_set_errno(dtp, EDT_COMPILER));
 			}
@@ -2230,11 +2297,11 @@ dt_load_libs_dir(dtrace_hdl_t *dtp, const char *path)
 			continue; /* skip any filename not ending in .d */
 
 		(void) snprintf(fname, sizeof (fname),
-		    "%s/%s", path, dp->d_name);
+			"%s/%s", path, dp->d_name);
 
 		if ((fp = fopen(fname, "r")) == NULL) {
 			dt_dprintf("skipping library %s: %s\n",
-			    fname, strerror(errno));
+				fname, strerror(errno));
 			continue;
 		}
 
@@ -2242,7 +2309,7 @@ dt_load_libs_dir(dtrace_hdl_t *dtp, const char *path)
 		 * Skip files whose name match an already processed library
 		 */
 		for (dld = dt_list_next(&dtp->dt_lib_dep); dld != NULL;
-		    dld = dt_list_next(dld)) {
+			dld = dt_list_next(dld)) {
 			end = strrchr(dld->dtld_library, '/');
 			/* dt_lib_depend_add ensures this */
 			assert(end != NULL);
@@ -2252,8 +2319,8 @@ dt_load_libs_dir(dtrace_hdl_t *dtp, const char *path)
 
 		if (dld != NULL) {
 			dt_dprintf("skipping library %s, already processed "
-			    "library with the same name: %s", dp->d_name,
-			    dld->dtld_library);
+				"library with the same name: %s", dp->d_name,
+				dld->dtld_library);
 			(void) fclose(fp);
 			continue;
 		}
@@ -2265,19 +2332,19 @@ dt_load_libs_dir(dtrace_hdl_t *dtp, const char *path)
 		}
 
 		rv = dt_compile(dtp, DT_CTX_DPROG, 1,
-		    DTRACE_PROBESPEC_NAME, NULL,
-		    DTRACE_C_EMPTY | DTRACE_C_CTL, 0, NULL, fp, NULL);
+			DTRACE_PROBESPEC_NAME, NULL,
+			DTRACE_C_EMPTY | DTRACE_C_CTL, 0, NULL, fp, NULL);
 
 		if (rv != NULL && dtp->dt_errno &&
-		    (dtp->dt_errno != EDT_COMPILER ||
-		    dtp->dt_errtag != dt_errtag(D_PRAGMA_DEPEND))) {
+			(dtp->dt_errno != EDT_COMPILER ||
+			dtp->dt_errtag != dt_errtag(D_PRAGMA_DEPEND))) {
 			(void) fclose(fp);
 			return (-1); /* preserve dt_errno */
 		}
 
 		if (dtp->dt_errno)
 			dt_dprintf("error parsing library %s: %s\n",
-			    fname, dtrace_errmsg(dtp, dtrace_errno(dtp)));
+				fname, dtrace_errmsg(dtp, dtrace_errno(dtp)));
 
 		(void) fclose(fp);
 		dtp->dt_filetag = NULL;
@@ -2314,11 +2381,11 @@ dt_load_libs_sort(dtrace_hdl_t *dtp)
 		goto err;
 
 	for (dld = dt_list_next(&dtp->dt_lib_dep_sorted); dld != NULL;
-	    dld = dt_list_next(dld)) {
+		dld = dt_list_next(dld)) {
 
 		if ((fp = fopen(dld->dtld_library, "r")) == NULL) {
 			dt_dprintf("skipping library %s: %s\n",
-			    dld->dtld_library, strerror(errno));
+				dld->dtld_library, strerror(errno));
 			continue;
 		}
 
@@ -2328,13 +2395,13 @@ dt_load_libs_sort(dtrace_hdl_t *dtp)
 		dtp->dt_filetag = NULL;
 
 		if (pgp == NULL && (dtp->dt_errno != EDT_COMPILER ||
-		    dtp->dt_errtag != dt_errtag(D_PRAGMA_DEPEND)))
+			dtp->dt_errtag != dt_errtag(D_PRAGMA_DEPEND)))
 			goto err;
 
 		if (pgp == NULL) {
 			dt_dprintf("skipping library %s: %s\n",
-			    dld->dtld_library,
-			    dtrace_errmsg(dtp, dtrace_errno(dtp)));
+				dld->dtld_library,
+				dtrace_errmsg(dtp, dtrace_errno(dtp)));
 		} else {
 			dld->dtld_loaded = B_TRUE;
 			dt_program_destroy(dtp, pgp);
@@ -2373,7 +2440,7 @@ dt_load_libs(dtrace_hdl_t *dtp)
 	 * in dt_lib_path.
 	 */
 	for (dirp = dt_list_next(dt_list_next(&dtp->dt_lib_path));
-	    dirp != NULL; dirp = dt_list_next(dirp)) {
+		dirp != NULL; dirp = dt_list_next(dirp)) {
 		if (dt_load_libs_dir(dtp, dirp->dir_path) != 0) {
 			dtp->dt_cflags &= ~DTRACE_C_NOLIBS;
 			return (-1); /* errno is set for us */
@@ -2395,7 +2462,7 @@ dt_load_libs(dtrace_hdl_t *dtp)
 
 static void *
 dt_compile(dtrace_hdl_t *dtp, int context, int acheck, dtrace_probespec_t pspec, void *arg,
-    uint_t cflags, int argc, char *const argv[], FILE *fp, const char *s)
+	uint_t cflags, int argc, char *const argv[], FILE *fp, const char *s)
 {
 	dt_node_t *dnp;
 	dt_decl_t *ddp;
@@ -2467,7 +2534,7 @@ dt_compile(dtrace_hdl_t *dtp, int context, int acheck, dtrace_probespec_t pspec,
 
 	yypcb->pcb_idents = dt_idhash_create("ambiguous", NULL, 0, 0);
 	yypcb->pcb_locals = dt_idhash_create("clause local", NULL,
-	    DIF_VAR_OTHER_UBASE, DIF_VAR_OTHER_MAX);
+		DIF_VAR_OTHER_UBASE, DIF_VAR_OTHER_MAX);
 
 	if (yypcb->pcb_idents == NULL || yypcb->pcb_locals == NULL)
 		longjmp(yypcb->pcb_jmpbuf, EDT_NOMEM);
@@ -2493,9 +2560,9 @@ dt_compile(dtrace_hdl_t *dtp, int context, int acheck, dtrace_probespec_t pspec,
 		(void) dt_idhash_iter(yypcb->pcb_pragmas, dt_idpragma, NULL);
 
 	if (argc > 1 && !(yypcb->pcb_cflags & DTRACE_C_ARGREF) &&
-	    !(yypcb->pcb_sflagv[argc - 1] & DT_IDFLG_REF)) {
+		!(yypcb->pcb_sflagv[argc - 1] & DT_IDFLG_REF)) {
 		xyerror(D_MACRO_UNUSED, "extraneous argument '%s' ($%d is "
-		    "not referenced)\n", yypcb->pcb_sargv[argc - 1], argc - 1);
+			"not referenced)\n", yypcb->pcb_sargv[argc - 1], argc - 1);
 	}
 
 	/*
@@ -2507,7 +2574,7 @@ dt_compile(dtrace_hdl_t *dtp, int context, int acheck, dtrace_probespec_t pspec,
 		dt_node_t *new_list = NULL;
 
 		for (dnp = yypcb->pcb_root->dn_list;
-		    dnp != NULL; dnp = next_dnp) {
+			dnp != NULL; dnp = next_dnp) {
 			/* remove this node from the list */
 			next_dnp = dnp->dn_list;
 			dnp->dn_list = NULL;
@@ -2531,7 +2598,7 @@ dt_compile(dtrace_hdl_t *dtp, int context, int acheck, dtrace_probespec_t pspec,
 		assert(yypcb->pcb_root->dn_kind == DT_NODE_PROG);
 
 		if ((dnp = yypcb->pcb_root->dn_list) == NULL &&
-		    !(yypcb->pcb_cflags & DTRACE_C_EMPTY))
+			!(yypcb->pcb_cflags & DTRACE_C_EMPTY))
 			xyerror(D_EMPTY, "empty D program translation unit\n");
 
 		if ((yypcb->pcb_prog = dt_program_create(dtp)) == NULL)
@@ -2585,17 +2652,17 @@ dt_compile(dtrace_hdl_t *dtp, int context, int acheck, dtrace_probespec_t pspec,
 
 out:
 	if (context != DT_CTX_DTYPE && yypcb->pcb_root != NULL &&
-	    DT_TREEDUMP_PASS(dtp, 3))
+		DT_TREEDUMP_PASS(dtp, 3))
 		dt_node_printr(yypcb->pcb_root, stderr, 0);
 
 	if (dtp->dt_cdefs_fd != -1 && (ftruncate64(dtp->dt_cdefs_fd, 0) == -1 ||
-	    lseek64(dtp->dt_cdefs_fd, 0, SEEK_SET) == -1 ||
-	    ctf_write(dtp->dt_cdefs->dm_ctfp, dtp->dt_cdefs_fd) == CTF_ERR))
+		lseek64(dtp->dt_cdefs_fd, 0, SEEK_SET) == -1 ||
+		ctf_write(dtp->dt_cdefs->dm_ctfp, dtp->dt_cdefs_fd) == CTF_ERR))
 		dt_dprintf("failed to update CTF cache: %s\n", strerror(errno));
 
 	if (dtp->dt_ddefs_fd != -1 && (ftruncate64(dtp->dt_ddefs_fd, 0) == -1 ||
-	    lseek64(dtp->dt_ddefs_fd, 0, SEEK_SET) == -1 ||
-	    ctf_write(dtp->dt_ddefs->dm_ctfp, dtp->dt_ddefs_fd) == CTF_ERR))
+		lseek64(dtp->dt_ddefs_fd, 0, SEEK_SET) == -1 ||
+		ctf_write(dtp->dt_ddefs->dm_ctfp, dtp->dt_ddefs_fd) == CTF_ERR))
 		dt_dprintf("failed to update CTF cache: %s\n", strerror(errno));
 
 	if (yypcb->pcb_fileptr && (cflags & DTRACE_C_CPP))
@@ -2615,33 +2682,33 @@ out:
 
 dtrace_prog_t *
 dt_program_strcompile(dtrace_hdl_t *dtp, const char *s,
-    dtrace_probespec_t spec, uint_t cflags, int argc, char *const argv[])
+	dtrace_probespec_t spec, uint_t cflags, int argc, char *const argv[])
 {
 	return (dt_compile(dtp, DT_CTX_DPROG, 0,
-	    spec, NULL, cflags, argc, argv, NULL, s));
+		spec, NULL, cflags, argc, argv, NULL, s));
 }
 
 dtrace_prog_t *
 dtrace_program_strcompile(dtrace_hdl_t *dtp, const char *s,
-    dtrace_probespec_t spec, uint_t cflags, int argc, char *const argv[])
+	dtrace_probespec_t spec, uint_t cflags, int argc, char *const argv[])
 {
 	return (dt_compile(dtp, DT_CTX_DPROG, 1,
-	    spec, NULL, cflags, argc, argv, NULL, s));
+		spec, NULL, cflags, argc, argv, NULL, s));
 }
 
 dtrace_prog_t *
 dtrace_program_fcompile(dtrace_hdl_t *dtp, FILE *fp,
-    uint_t cflags, int argc, char *const argv[])
+	uint_t cflags, int argc, char *const argv[])
 {
 	return (dt_compile(dtp, DT_CTX_DPROG, 1,
-	    DTRACE_PROBESPEC_NAME, NULL, cflags, argc, argv, fp, NULL));
+		DTRACE_PROBESPEC_NAME, NULL, cflags, argc, argv, fp, NULL));
 }
 
 int
 dtrace_type_strcompile(dtrace_hdl_t *dtp, const char *s, dtrace_typeinfo_t *dtt)
 {
 	(void) dt_compile(dtp, DT_CTX_DTYPE, 0,
-	    DTRACE_PROBESPEC_NONE, dtt, 0, 0, NULL, NULL, s);
+		DTRACE_PROBESPEC_NONE, dtt, 0, 0, NULL, NULL, s);
 	return (dtp->dt_errno ? -1 : 0);
 }
 
@@ -2649,6 +2716,6 @@ int
 dtrace_type_fcompile(dtrace_hdl_t *dtp, FILE *fp, dtrace_typeinfo_t *dtt)
 {
 	(void) dt_compile(dtp, DT_CTX_DTYPE, 0,
-	    DTRACE_PROBESPEC_NONE, dtt, 0, 0, NULL, fp, NULL);
+		DTRACE_PROBESPEC_NONE, dtt, 0, 0, NULL, fp, NULL);
 	return (dtp->dt_errno ? -1 : 0);
 }

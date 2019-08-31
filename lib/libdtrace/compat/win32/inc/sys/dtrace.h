@@ -429,6 +429,9 @@ typedef struct dtrace_difv {
 #define	DTRACEACT_TRACEMEM		6	/* tracemem() action */
 #define	DTRACEACT_TRACEMEM_DYNSIZE	7	/* dynamic tracemem() size */
 #define	DTRACEACT_PRINTM		8	/* printm() action (BSD) */
+#ifdef _WIN32
+#define DTRACEACT_ETWTRACE		9	/* etw_trace() action */
+#endif
 
 #define	DTRACEACT_PROC			0x0100
 #define	DTRACEACT_USTACK		(DTRACEACT_PROC + 1)
@@ -454,6 +457,9 @@ typedef struct dtrace_difv {
 #define	DTRACEACT_BREAKPOINT		(DTRACEACT_KERNEL_DESTRUCTIVE + 1)
 #define	DTRACEACT_PANIC			(DTRACEACT_KERNEL_DESTRUCTIVE + 2)
 #define	DTRACEACT_CHILL			(DTRACEACT_KERNEL_DESTRUCTIVE + 3)
+#ifdef _WIN32
+#define DTRACEACT_LKD			(DTRACEACT_KERNEL_DESTRUCTIVE + 4)
+#endif
 
 #define	DTRACEACT_SPECULATIVE		0x0600
 #define	DTRACEACT_SPECULATE		(DTRACEACT_SPECULATIVE + 1)
@@ -685,6 +691,10 @@ typedef struct dof_hdr {
 typedef uint32_t dof_secidx_t;	/* section header table index type */
 typedef uint32_t dof_stridx_t;	/* string table index type */
 
+#ifdef _WIN32
+typedef uint32_t dof_etwidx_t;	/* etw trace table index type */
+#endif
+
 #define	DOF_SECIDX_NONE	(-1U)	/* null value for section indices */
 #define	DOF_STRIDX_NONE	(-1U)	/* null value for string indices */
 
@@ -724,9 +734,13 @@ typedef struct dof_sec {
 #define	DOF_SECT_XLEXPORT	24	/* dof_xlator_t */
 #define	DOF_SECT_PREXPORT	25	/* dof_secidx_t array (exported objs) */
 #define	DOF_SECT_PRENOFFS	26	/* uint32_t array (enabled offsets) */
+#ifdef _WIN32
+#define DOF_SECT_ETWTRACE	27	/* etw trace table */
+#endif
 
 #define	DOF_SECF_LOAD		1	/* section should be loaded */
 
+#ifndef _WIN32
 #define	DOF_SEC_ISLOADABLE(x)						\
 	(((x) == DOF_SECT_ECBDESC) || ((x) == DOF_SECT_PROBEDESC) ||	\
 	((x) == DOF_SECT_ACTDESC) || ((x) == DOF_SECT_DIFOHDR) ||	\
@@ -740,6 +754,21 @@ typedef struct dof_sec {
 	((x) == DOF_SECT_XLMEMBERS) || ((x) == DOF_SECT_XLIMPORT) ||	\
 	((x) == DOF_SECT_XLEXPORT) ||  ((x) == DOF_SECT_PREXPORT) || 	\
 	((x) == DOF_SECT_PRENOFFS))
+#else
+#define	DOF_SEC_ISLOADABLE(x)						\
+	(((x) == DOF_SECT_ECBDESC) || ((x) == DOF_SECT_PROBEDESC) ||	\
+	((x) == DOF_SECT_ACTDESC) || ((x) == DOF_SECT_DIFOHDR) ||	\
+	((x) == DOF_SECT_DIF) || ((x) == DOF_SECT_STRTAB) ||		\
+	((x) == DOF_SECT_VARTAB) || ((x) == DOF_SECT_RELTAB) ||		\
+	((x) == DOF_SECT_TYPTAB) || ((x) == DOF_SECT_URELHDR) ||	\
+	((x) == DOF_SECT_KRELHDR) || ((x) == DOF_SECT_OPTDESC) ||	\
+	((x) == DOF_SECT_PROVIDER) || ((x) == DOF_SECT_PROBES) ||	\
+	((x) == DOF_SECT_PRARGS) || ((x) == DOF_SECT_PROFFS) ||		\
+	((x) == DOF_SECT_INTTAB) || ((x) == DOF_SECT_XLTAB) ||		\
+	((x) == DOF_SECT_XLMEMBERS) || ((x) == DOF_SECT_XLIMPORT) ||	\
+	((x) == DOF_SECT_XLEXPORT) ||  ((x) == DOF_SECT_PREXPORT) || 	\
+	((x) == DOF_SECT_PRENOFFS) || ((x) == DOF_SECT_ETWTRACE))
+#endif
 
 typedef struct dof_ecbdesc {
 	dof_secidx_t dofe_probes;	/* link to DOF_SECT_PROBEDESC */
@@ -761,6 +790,9 @@ typedef struct dof_probedesc {
 typedef struct dof_actdesc {
 	dof_secidx_t dofa_difo;		/* link to DOF_SECT_DIFOHDR */
 	dof_secidx_t dofa_strtab;	/* link to DOF_SECT_STRTAB section */
+#ifdef _WIN32
+	dof_secidx_t dofa_etwtab;	/* link to DOF_SECT_ETWTRACE section */
+#endif
 	uint32_t dofa_kind;		/* action kind (DTRACEACT_* constant) */
 	uint32_t dofa_ntuple;		/* number of subsequent tuple actions */
 	uint64_t dofa_arg;		/* kind-specific argument */
@@ -969,6 +1001,9 @@ typedef struct dtrace_recdesc {
 	uint32_t dtrd_offset;			/* offset in ECB's data */
 	uint16_t dtrd_alignment;		/* required alignment */
 	uint16_t dtrd_format;			/* format, if any */
+#ifdef _WIN32
+	uint16_t dtrd_etwtrace;		/* etw trace, if any */
+#endif
 	uint64_t dtrd_arg;			/* action argument */
 	uint64_t dtrd_uarg;			/* user argument */
 } dtrace_recdesc_t;
@@ -999,6 +1034,14 @@ typedef struct dtrace_fmtdesc {
 	int dtfd_length;			/* length of format string */
 	uint16_t dtfd_format;			/* format identifier */
 } dtrace_fmtdesc_t;
+
+#ifdef _WIN32
+typedef struct dtrace_etwtracedesc {
+	DTRACE_PTR(void, dtet_desc);	/* trace description */
+	size_t dtet_length;				/* trace description length */
+	uint16_t dtet_etwtrace;			/* trace id */
+} dtrace_etwtracedesc_t;
+#endif
 
 #define	DTRACE_SIZEOF_EPROBEDESC(desc)				\
 	(sizeof (dtrace_eprobedesc_t) + ((desc)->dtepd_nrecs ?	\
@@ -1333,6 +1376,10 @@ typedef struct {
 							/* get DOF */
 #define	DTRACEIOC_REPLICATE	_IOW('x',18,dtrace_repldesc_t)
 							/* replicate enab */
+#ifdef _WIN32
+#define DTRACEIOC_ETWTRACE _IOW('x',19,dtrace_etwtracedesc_t)
+							/* get etw trace description */
+#endif
 #endif
 
 /*
@@ -2390,6 +2437,7 @@ extern void (*dtrace_closef)(void);
 
 extern void (*dtrace_debugger_init)(void);
 extern void (*dtrace_debugger_fini)(void);
+
 extern dtrace_cacheid_t dtrace_predcache_id;
 
 #if defined(illumos) || defined(_WIN32)

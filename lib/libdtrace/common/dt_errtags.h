@@ -265,6 +265,17 @@ typedef enum {
 	D_NOREG,			/* no available internal registers */
 	D_PRINTM_ADDR,			/* printm() memref bad type */
 	D_PRINTM_SIZE,			/* printm() size bad type */
+#ifdef _WIN32
+	D_ETW_TRACE_NOT_AGG,	/* etw_trace() does not support aggregations */
+	D_ETW_TRACE_PNAME,		/* etw_trace() providername bad type */
+	D_ETW_TRACE_PGUID,		/* etw_trace() providerguid bad type */
+	D_ETW_TRACE_ENAME,		/* etw_trace() eventname bad type */
+	D_ETW_TRACE_LEVEL,		/* etw_trace() level bad type */
+	D_ETW_TRACE_KEYWORD,	/* etw_trace() keyword bad type */
+	D_ETW_TRACE_PAYLOAD,	/* etw_trace() payload error */
+	D_ETW_TRACE_PAYLOADTYPE,/* etw_trace() payload type mismatch */
+	D_ETW_TRACE_PARAMS,		/* etw_trace() not enough parameters */
+#endif
 } dt_errtag_t;
 
 extern const char *dt_errtag(dt_errtag_t);

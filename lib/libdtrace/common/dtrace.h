@@ -160,6 +160,9 @@ typedef struct dtrace_stmtdesc {
 	void *dtsd_aggdata;			/* aggregation data */
 	void *dtsd_fmtdata;			/* type-specific output data */
 	void *dtsd_strdata;			/* type-specific string data */
+#ifdef _WIN32
+	void *dtsd_etwtrace;		/* type-specific etw trace data */
+#endif
 	void (*dtsd_callback)(void);		/* callback function for EPID */
 	void *dtsd_data;			/* callback data pointer */
 	dtrace_attribute_t dtsd_descattr;	/* probedesc attributes */
@@ -250,6 +253,9 @@ extern int dtrace_system(dtrace_hdl_t *, FILE *, void *,
 extern int dtrace_freopen(dtrace_hdl_t *, FILE *, void *,
     const dtrace_probedata_t *, const dtrace_recdesc_t *, uint_t,
     const void *, size_t);
+
+extern int dtrace_etw_trace(dtrace_hdl_t *, void *,
+	const dtrace_recdesc_t *, uint_t, const void *, size_t);
 
 /*
  * Type-specific output printing

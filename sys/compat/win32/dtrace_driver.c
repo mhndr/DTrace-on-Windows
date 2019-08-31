@@ -215,6 +215,12 @@ Return Value:
     case EACCES:
         return STATUS_ACCESS_DENIED;
 
+    case ENOSPC:
+        return STATUS_INSUFFICIENT_RESOURCES;
+
+    case E2BIG:
+        return STATUS_NO_MEMORY;
+
     default:
         return STATUS_UNSUCCESSFUL;
     }
@@ -1172,17 +1178,31 @@ Exit:
 
 #pragma code_seg(pop)
 
+//
+// The following code is a dtrace engine interface to the
+// system through the engine helper routines. They are only used when
+// driver is built in the standalone mode.
+//
+
+#if DTRACE_STANDALONE
+
+#define DT_HELPER_PRESENT(name)                                      \
+    ((NULL != DtEngineHelpers) &&                                    \
+     (DtEngineHelpers->Size >=                                       \
+      RTL_SIZEOF_THROUGH_FIELD(TRACE_ENGINE_HELPERS, name)) &&       \
+     (NULL != DtEngineHelpers->name))
+
 int dtrace_safememcpy(void* sys, uintptr_t untr, size_t bytesize, size_t chunksize, int read)
 {
-    if ((NULL == DtEngineHelpers) || (NULL == DtEngineHelpers->AccessMemory)) {
+    if (!DT_HELPER_PRESENT(AccessMemory)) {
         return 0;
     }
     return DtEngineHelpers->AccessMemory(sys, untr, bytesize, chunksize, read);
 }
 
-ULONG dtrace_userstackwalk(ULONG limit, PVOID* stack)
+ULONG dtrace_userstackwalk(ULONG limit, PULONGLONG stack)
 {
-    if ((NULL == DtEngineHelpers) || (NULL == DtEngineHelpers->WalkUserStack)) {
+    if (!DT_HELPER_PRESENT(WalkUserStack)) {
         return 0;
     }
     return DtEngineHelpers->WalkUserStack(limit, stack);
@@ -1190,19 +1210,70 @@ ULONG dtrace_userstackwalk(ULONG limit, PVOID* stack)
 
 PULONG_PTR dtrace_threadprivate(ULONG Index)
 {
-    if ((NULL == DtEngineHelpers) || (NULL == DtEngineHelpers->GetCurrentThreadTracePrivate)) {
+    if (!DT_HELPER_PRESENT(GetCurrentThreadTracePrivate)) {
         return NULL;
     }
     return DtEngineHelpers->GetCurrentThreadTracePrivate(Index);
 }
 
-void dtrace_priv_filter(KPROCESSOR_MODE PreviousMode, PBOOLEAN User, PBOOLEAN Kernel)
+void dtrace_priv_filter(KPROCESSOR_MODE PreviousMode, PBOOLEAN Kernel, PBOOLEAN User)
 {
-    if ((NULL == DtEngineHelpers) || (NULL == DtEngineHelpers->FilterAccess)) {
+    if (!DT_HELPER_PRESENT(FilterAccess)) {
         *Kernel = *User = FALSE;
     } else {
         DtEngineHelpers->FilterAccess(PreviousMode, Kernel, User);
     }
 }
 
+ULONGLONG dtrace_tsc_frequency_hv(void)
+{
+    return 0;
+}
+
+ULONG_PTR dtrace_tfreg(PKTRAP_FRAME TrapFrame, ULONG RegisterIndex)
+{
+    if (!DT_HELPER_PRESENT(GetTrapFrameRegister)) {
+        return 0;
+    }
+    return DtEngineHelpers->GetTrapFrameRegister(TrapFrame, RegisterIndex);
+}
+
+/*PKTRAP_FRAME*/PVOID dtrace_tf(void)
+{
+    if (!DT_HELPER_PRESENT(GetTrapFrame)) {
+        return 0;
+    }
+    return DtEngineHelpers->GetTrapFrame();
+}
+
+void dtrace_lkd(LPCWSTR ComponentName, ULONG BugCheckCode, ULONG_PTR P1,
+                ULONG_PTR P2, ULONG_PTR P3, ULONG_PTR P4, ULONG Flags)
+{
+     if (DT_HELPER_PRESENT(CollectLiveKernelDump)) {
+         DtEngineHelpers->CollectLiveKernelDump(ComponentName, BugCheckCode,
+                                                P1, P2, P3, P4, Flags);
+     }
+}
+
+NTSTATUS
+TraceRegisterEngine (
+    PCTRACE_ENGINE Engine,
+    PCTRACE_ENGINE_HELPERS* HelpersPtr
+    )
+{
+    return STATUS_NOT_SUPPORTED;
+}
+
+__declspec(dllexport)
+NTSTATUS 
+TraceInitSystem (
+    ULONG_PTR p1,
+    ULONG_PTR p2,
+    ULONG_PTR p3
+    )
+{
+    return STATUS_NOT_SUPPORTED;
+}
+
+#endif
 

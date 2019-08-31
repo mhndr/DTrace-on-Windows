@@ -1854,7 +1854,7 @@ dt_module_load_proc(dtrace_hdl_t *dtp, dt_module_t *dmp)
 	 * Note that on success we do not release this hold. We must hold this
 	 * for our life time.
 	 */
-	p = dt_proc_grab(dtp, dmp->dm_pid, 0, PGRAB_RDONLY | PGRAB_FORCE);
+	p = dt_proc_grab(dtp, dmp->dm_pid, PGRAB_RDONLY | PGRAB_FORCE, 0);
 	if (p == NULL) {
 		dt_dprintf("failed to grab pid: %d\n", (int)dmp->dm_pid);
 		return (dt_set_errno(dtp, EDT_CANTLOAD));
@@ -1965,7 +1965,7 @@ static BOOL CALLBACK dt_module_load_proc_EnumModulesCallback(PCSTR ModuleName, D
 static int
 dt_module_load_proc(dtrace_hdl_t *dtp, dt_module_t *dmp)
 {
-	dmp->dm_phdl = dt_proc_grab(dtp, dmp->dm_pid, 0, PGRAB_RDONLY | PGRAB_FORCE);
+	dmp->dm_phdl = dt_proc_grab(dtp, dmp->dm_pid, PGRAB_RDONLY | PGRAB_FORCE, 0);
 	if (dmp->dm_phdl == NULL) {
 		dt_dprintf("failed to grab pid: %d\n", (int)dmp->dm_pid);
 		return (dt_set_errno(dtp, EDT_CANTLOAD));

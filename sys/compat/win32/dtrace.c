@@ -76,6 +76,7 @@
 #include <sys/dtrace_impl.h>
 #include <sys/cpuvar.h>
 #include <sys/cpuvar_defs.h>
+#include <dt_etw_trace.h>
 
 #include "dtracep.h"
 
@@ -291,6 +292,24 @@ static eventhandler_tag	dtrace_kld_unload_try_tag;
 #endif
 
 #ifdef _WIN32
+/*tracks outstanding LKD request */
+
+#define DTRACE_LKD_INUSE	 ((uint64_t)(1) << 0) /* 1 */
+#define DTRACE_LKD_REQUESTED ((uint64_t)(1) << 1) /* 2 */
+
+struct lkd_arg {
+
+	kthread_t *owner;
+	uint64_t flags;
+	char *prov;
+	char *mod;
+	char *func;
+	char *name;
+	VOID *ecb;
+};
+
+static struct lkd_arg lkd_args;
+
 static kmutex_t dtrace_unr_mtx;
 #endif
 
@@ -459,6 +478,7 @@ static kmutex_t dtrace_errlock;
 #define	DTRACE_AGGHASHSIZE_SLEW		17
 
 #define	DTRACE_V4MAPPED_OFFSET		(sizeof (uint32_t) * 3)
+
 
 /*
  * The key for a thread-local variable consists of the lower 61 bits of the
@@ -3486,8 +3506,8 @@ dtrace_dif_variable(dtrace_mstate_t *mstate, dtrace_state_t *state, uint64_t v,
 #if defined(_WIN32)
 
 	case DIF_VAR_UREGS: {
-		struct _CONTEXT* ctx;
-		struct _KTRAP_FRAME* tf;
+		struct _CONTEXT* ctx = NULL;
+		struct _KTRAP_FRAME* tf = NULL;
 		KPROCESSOR_MODE mode;
 		dtrace_provider_t *pv;
 
@@ -3495,17 +3515,23 @@ dtrace_dif_variable(dtrace_mstate_t *mstate, dtrace_state_t *state, uint64_t v,
 			return (0);
 
 		pv = mstate->dtms_probe->dtpr_provider;
-		if (pv->dtpv_pops.dtps_getframe == NULL)
-			return (0);
 
-		mode = pv->dtpv_pops.dtps_getframe(pv->dtpv_arg,
-						   mstate->dtms_probe->dtpr_id,
-						   mstate->dtms_probe->dtpr_arg,
-						   mstate->dtms_context,
-						   &tf,
-						   &ctx);
-		if (UserMode != mode)
-			return (0);
+		if (pv->dtpv_pops.dtps_getframe != NULL) {
+			mode = pv->dtpv_pops.dtps_getframe(pv->dtpv_arg,
+							   mstate->dtms_probe->dtpr_id,
+							   mstate->dtms_probe->dtpr_arg,
+							   mstate->dtms_context,
+							   &tf,
+							   &ctx);
+			if (UserMode != mode) {
+				tf = NULL;
+				ctx = NULL;
+			}
+		}
+
+		if (NULL == ctx && NULL == tf) {
+			tf = dtrace_tf();
+		}
 
 		return (dtrace_getreg(tf, ctx, ndx));
 	}
@@ -7139,6 +7165,20 @@ dtrace_action_breakpoint(dtrace_ecb_t *ecb)
 #endif
 }
 
+#ifdef _WIN32
+void
+dtrace_action_lkd(const char *format, ...)
+{
+	va_list alist;
+
+	va_start(alist, format);
+	dtrace_lkd(L"DTRACE", MANUALLY_INITIATED_CRASH, 'crTD', (ULONG_PTR)format,
+				(ULONG_PTR)alist, 0, 0);
+
+	va_end(alist);
+}
+#endif
+
 static void
 dtrace_action_panic(dtrace_ecb_t *ecb)
 {
@@ -7198,6 +7238,52 @@ dtrace_action_raise(uint64_t sig)
 #endif
 #endif
 }
+
+#ifdef _WIN32
+static boolean_t
+dtrace_action_request_lkd(dtrace_ecb_t *ecb)
+{
+	/*
+	* Defer request of LKD to the end of probe processing
+	* when interrupts are re-enabled.  Do best effort
+	* to prevent two CPU from racing setting the parameters or
+	* allowing recursive call on this thread.
+	*/
+
+	if (dtrace_destructive_disallow)
+		return B_FALSE;
+
+	dtrace_probe_t *probe = ecb->dte_probe;
+
+	if (dtrace_casptr(&lkd_args.owner, NULL, curthread) != NULL)
+		return B_FALSE;
+
+	lkd_args.prov = probe->dtpr_provider->dtpv_name;
+	lkd_args.mod = probe->dtpr_mod;
+	lkd_args.func = probe->dtpr_func;
+	lkd_args.name = probe->dtpr_name;
+	lkd_args.ecb = (void *)ecb;
+	return B_TRUE;
+}
+
+static void
+dtrace_action_process_lkd(boolean_t active)
+{
+	volatile uint16_t *flags = &cpu_core[curcpu].cpuc_dtrace_flags;
+
+	if ((active == B_FALSE) || lkd_args.owner != curthread)
+		return;
+
+	if (!(*flags & CPU_DTRACE_FAULT)) {
+
+		dtrace_action_lkd("dtrace: LKD at probe %s:%s:%s:%s (ecb %p)",
+			lkd_args.prov, lkd_args.mod, lkd_args.func, lkd_args.name,
+			lkd_args.ecb);
+	}
+
+	lkd_args.owner = NULL;
+}
+#endif
 
 static void
 dtrace_action_stop(void)
@@ -7470,6 +7556,9 @@ dtrace_probe(dtrace_id_t id, uintptr_t arg0, uintptr_t arg1,
 	int vtime, onintr;
 	volatile uint16_t *flags;
 	hrtime_t now;
+#ifdef _WIN32
+	boolean_t lkd_req = B_FALSE;
+#endif
 
 	if (panicstr != NULL)
 		return;
@@ -7794,7 +7883,17 @@ dtrace_probe(dtrace_id_t id, uintptr_t arg0, uintptr_t arg1,
 				if (dtrace_priv_kernel_destructive(state))
 					dtrace_action_panic(ecb);
 				continue;
+#ifdef _WIN32
+			case DTRACEACT_LKD:
+				if (dtrace_priv_kernel_destructive(state) &&
+				    (mstate.dtms_ipl == PASSIVE_LEVEL)) {
 
+					ASSERT(mstate->dtms_present & DTRACE_MSTATE_IPL);
+
+					lkd_req = dtrace_action_request_lkd(ecb);
+				}
+				continue;
+#endif
 			case DTRACEACT_STACK:
 				if (!dtrace_priv_kernel(state))
 					continue;
@@ -8156,6 +8255,18 @@ dtrace_probe(dtrace_id_t id, uintptr_t arg0, uintptr_t arg1,
 #endif
 
 	dtrace_interrupt_enable(cookie);
+
+	/*
+	 * At this point the probe is still running but interrupts are enabled.
+	 * Actions which must have a chance to run with interrupts enabled
+	 * but while in the probe context can happen here.  Ecb and even the probe
+	 * may be waiting to be torn down, so don't access objects protected by
+	 * the interrupt disabled to be safe.
+	*/
+
+#ifdef _WIN32
+	dtrace_action_process_lkd(lkd_req);
+#endif
 }
 
 /*
@@ -11132,6 +11243,99 @@ dtrace_format_destroy(dtrace_state_t *state)
 }
 
 /*
+ * DTrace ETW Trace Functions
+ */
+
+#ifdef _WIN32
+
+static uint16_t
+dtrace_etw_trace_add(dtrace_state_t *state, dt_etw_trace_desc_t *det_desc)
+{
+	dt_etw_trace_desc_t *trace, **new;
+	uint16_t ndx;
+	uint64_t len = DT_ETW_TRACE_BSIZE(det_desc);
+
+	trace = kmem_zalloc(len, KM_SLEEP);
+	bcopy(det_desc, trace, len);
+
+	for (ndx = 0; ndx < state->dts_netwtraces; ndx++) {
+		if (state->dts_etwtraces[ndx] == NULL) {
+			state->dts_etwtraces[ndx] = trace;
+			return (ndx + 1);
+		}
+	}
+
+	if (state->dts_netwtraces == USHRT_MAX) {
+		/*
+		 * This is only likely if a denial-of-service attack is being
+		 * attempted.  As such, it's okay to fail silently here.
+		 */
+		kmem_free(trace, len);
+		return (0);
+	}
+
+	/*
+	 * For simplicity, we always resize the etw traces array to be exactly the
+	 * number of etw traces.
+	 */
+	ndx = state->dts_netwtraces++;
+	new = kmem_alloc((ndx + 1) * sizeof (char *), KM_SLEEP);
+
+	if (state->dts_etwtraces != NULL) {
+		ASSERT(ndx != 0);
+		bcopy(state->dts_etwtraces, new, ndx * sizeof (char *));
+		kmem_free(state->dts_etwtraces, ndx * sizeof (char *));
+	}
+
+	state->dts_etwtraces = new;
+	state->dts_etwtraces[ndx] = trace;
+
+	return (ndx + 1);
+}
+
+static void
+dtrace_etw_trace_remove(dtrace_state_t *state, uint16_t etwtrace)
+{
+	dt_etw_trace_desc_t *trace;
+
+	ASSERT(state->dts_etwtraces != NULL);
+	ASSERT(etwtrace <= state->dts_netwtraces);
+	ASSERT(state->dts_etwtraces[etwtrace - 1] != NULL);
+
+	trace = state->dts_etwtraces[etwtrace - 1];
+	kmem_free(trace, DT_ETW_TRACE_BSIZE(trace));
+	state->dts_etwtraces[etwtrace - 1] = NULL;
+}
+
+static void
+dtrace_etw_trace_destroy(dtrace_state_t *state)
+{
+	int i;
+
+	if (state->dts_etwtraces == 0) {
+		ASSERT(state->dts_etwtraces == NULL);
+		return;
+	}
+
+	ASSERT(state->dts_etwtraces != NULL);
+
+	for (i = 0; i < state->dts_netwtraces; i++) {
+		dt_etw_trace_desc_t *trace = state->dts_etwtraces[i];
+
+		if (trace == NULL)
+			continue;
+
+		kmem_free(trace, DT_ETW_TRACE_BSIZE(trace));
+	}
+
+	kmem_free(state->dts_etwtraces, state->dts_netwtraces * sizeof (char *));
+	state->dts_netwtraces = 0;
+	state->dts_etwtraces = NULL;
+}
+
+#endif
+
+/*
  * DTrace Predicate Functions
  */
 static dtrace_predicate_t *
@@ -11678,6 +11882,7 @@ dtrace_ecb_action_add(dtrace_ecb_t *ecb, dtrace_actdesc_t *desc)
 	dtrace_difo_t *dp = desc->dtad_difo;
 	uint32_t size = 0, align = sizeof (uint8_t), mask;
 	uint16_t format = 0;
+	uint16_t etwtrace = 0;
 	dtrace_recdesc_t *rec;
 	dtrace_state_t *state = ecb->dte_state;
 	dtrace_optval_t *opt = state->dts_options, nframes = 0, strsize;
@@ -11713,6 +11918,32 @@ dtrace_ecb_action_add(dtrace_ecb_t *ecb, dtrace_actdesc_t *desc)
 		}
 
 		switch (desc->dtad_kind) {
+#ifdef _WIN32
+		case DTRACEACT_ETWTRACE:
+			/*
+			 * We know that our arg is a structure describing
+			 * an etw trace -- turn it into an etw trace index.
+			 */
+			ASSERT(arg != 0);
+			etwtrace = dtrace_etw_trace_add(state,
+				(dt_etw_trace_desc_t *)(uintptr_t)arg);
+
+			if (dp == NULL)
+				return (EINVAL);
+
+			if ((size = dp->dtdo_rtype.dtdt_size) != 0)
+				break;
+
+			if (dp->dtdo_rtype.dtdt_kind == DIF_TYPE_STRING) {
+				if (!(dp->dtdo_rtype.dtdt_flags & DIF_TF_BYREF))
+					return (EINVAL);
+
+				size = opt[DTRACEOPT_STRSIZE];
+			}
+
+			break;
+
+#endif
 		case DTRACEACT_PRINTF:
 		case DTRACEACT_PRINTA:
 		case DTRACEACT_SYSTEM:
@@ -11824,6 +12055,7 @@ dtrace_ecb_action_add(dtrace_ecb_t *ecb, dtrace_actdesc_t *desc)
 
 		case DTRACEACT_CHILL:
 		case DTRACEACT_DISCARD:
+		case DTRACEACT_LKD:
 		case DTRACEACT_RAISE:
 			if (dp == NULL)
 				return (EINVAL);
@@ -11906,6 +12138,9 @@ dtrace_ecb_action_add(dtrace_ecb_t *ecb, dtrace_actdesc_t *desc)
 	rec->dtrd_uarg = desc->dtad_uarg;
 	rec->dtrd_alignment = (uint16_t)align;
 	rec->dtrd_format = format;
+#ifdef _WIN32
+	rec->dtrd_etwtrace = etwtrace;
+#endif
 
 	if ((last = ecb->dte_action_last) != NULL) {
 		ASSERT(ecb->dte_action != NULL);
@@ -11928,6 +12163,9 @@ dtrace_ecb_action_remove(dtrace_ecb_t *ecb)
 	dtrace_vstate_t *vstate = &ecb->dte_state->dts_vstate;
 	dtrace_difo_t *dp;
 	uint16_t format;
+#ifdef _WIN32
+	uint16_t etwtrace;
+#endif
 
 	if (act != NULL && act->dta_refcnt > 1) {
 		ASSERT(act->dta_next == NULL || act->dta_next->dta_refcnt == 1);
@@ -11940,6 +12178,11 @@ dtrace_ecb_action_remove(dtrace_ecb_t *ecb)
 
 			if ((format = act->dta_rec.dtrd_format) != 0)
 				dtrace_format_remove(ecb->dte_state, format);
+
+#ifdef _WIN32
+			if ((etwtrace = act->dta_rec.dtrd_etwtrace) != 0)
+				dtrace_etw_trace_remove(ecb->dte_state, etwtrace);
+#endif
 
 			if ((dp = act->dta_difo) != NULL)
 				dtrace_difo_release(dp, vstate);
@@ -14092,6 +14335,41 @@ dtrace_dof_actdesc(dof_hdr_t *dof, dof_sec_t *sec, dtrace_vstate_t *vstate,
 			}
 		}
 
+#ifdef _WIN32
+		if (kind == DTRACEACT_ETWTRACE &&
+			desc->dofa_etwtab != DOF_SECIDX_NONE) {
+			dof_sec_t *etwtracesec;
+			dt_etw_trace_desc_t *dof_det, *det;
+			size_t dof_det_sz = 0;
+
+			/*
+			* The argument to this action is an index
+			* into the DOF etw trace table.
+			*/
+			if ((etwtracesec = dtrace_dof_sect(dof,
+				DOF_SECT_ETWTRACE, desc->dofa_etwtab)) == NULL)
+				goto err;
+
+			if (desc->dofa_arg >= etwtracesec->dofs_size) {
+				dtrace_dof_error(dof, "bogus etw trace sector");
+				goto err;
+			}
+
+			dof_det = (dt_etw_trace_desc_t *)((uintptr_t)dof +
+				(uintptr_t)(etwtracesec->dofs_offset + desc->dofa_arg));
+			dof_det_sz = DT_ETW_TRACE_BSIZE(dof_det);
+
+			if (desc->dofa_arg + dof_det_sz > etwtracesec->dofs_size) {
+				dtrace_dof_error(dof, "bogus etw trace");
+				goto err;
+			}
+
+			det = kmem_alloc(dof_det_sz, KM_SLEEP);
+			bcopy(dof_det, det, dof_det_sz);
+			arg = (uint64_t)(uintptr_t)det;
+		}
+#endif
+
 		act = dtrace_actdesc_create(kind, desc->dofa_ntuple,
 		    desc->dofa_uarg, arg);
 
@@ -15743,6 +16021,10 @@ dtrace_state_destroy(dtrace_state_t *state)
 		kmem_free(spec, nspec * sizeof (dtrace_speculation_t));
 
 	dtrace_format_destroy(state);
+
+#ifdef _WIN32
+	dtrace_etw_trace_destroy(state);
+#endif
 
 	if (state->dts_aggid_arena != NULL) {
 #ifdef illumos
@@ -19668,6 +19950,51 @@ dtrace_ioctl(struct dtrace_state *state, unsigned long cmd, void* arg)
 
 		return (0);
 	}
+#ifdef _WIN32
+	case DTRACEIOC_ETWTRACE: {
+		dtrace_etwtracedesc_t detdesc;
+		dt_etw_trace_desc_t *trace;
+		size_t len;
+
+		if (copyin(arg, &detdesc, sizeof (detdesc)) != 0)
+			return (EFAULT);
+
+		mutex_enter(&dtrace_lock);
+
+		if (detdesc.dtet_etwtrace > state->dts_netwtraces) {
+			mutex_exit(&dtrace_lock);
+			return (EINVAL);
+		}
+
+		/*
+		 * ETW traces descriptors are allocated contiguously and they are
+		 * never freed; if an etw trace index is less than the number of
+		 * etw traces, we can assert that the etw trace map is non-NULL
+		 * and that the etw trace for the specified index is non-NULL.
+		 */
+		ASSERT(state->dts_etwtraces != NULL);
+		trace = state->dts_etwtraces[detdesc.dtet_etwtrace - 1];
+		ASSERT(trace != NULL);
+
+		len = DT_ETW_TRACE_BSIZE(trace);
+
+		if (len > detdesc.dtet_length) {
+			detdesc.dtet_length = len;
+		} else {
+			if (copyout(trace, detdesc.dtet_desc, len) != 0) {
+				mutex_exit(&dtrace_lock);
+				return (EINVAL);
+			}
+		}
+
+		mutex_exit(&dtrace_lock);
+
+		if (copyout(&detdesc, arg, sizeof (detdesc)) != 0)
+			return (EFAULT);
+
+		return (0);
+	}
+#endif
 	default:
 		error = ENOTTY;
 	}

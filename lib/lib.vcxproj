@@ -71,7 +71,7 @@
       <PreprocessorDefinitions>_DEBUG;DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>libvcruntimed.lib;libcmtd.lib;ucrtd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libvcruntimed.lib;libcmtd.lib;libcpmtd.lib;ucrtd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
@@ -79,7 +79,7 @@
       <PreprocessorDefinitions>_NDEBUG;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>libvcruntime.lib;libcmt.lib;ucrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libvcruntime.lib;libcmt.lib;libcpmt.lib;ucrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -158,6 +158,7 @@
     <ClCompile Include="libdtrace\compat\win32\dirent.c" />
     <ClCompile Include="libdtrace\compat\win32\dllmain.c" />
     <ClCompile Include="libdtrace\compat\win32\dt_disasm.c" />
+    <ClCompile Include="libdtrace\compat\win32\dt_etw_trace.cpp" />
     <ClCompile Include="libdtrace\compat\win32\dt_fasttrap.c" />
     <ClCompile Include="libdtrace\compat\win32\dt_fgraph.c" />
     <ClCompile Include="libdtrace\compat\win32\dt_security.c" />

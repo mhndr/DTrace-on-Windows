@@ -61,9 +61,30 @@ extern int dtrace_ioctl(struct dtrace_state *state, unsigned long cmd, void* add
 // Utility
 //
 
+#if !defined(DTRACE_STANDALONE)
+#define dtrace_tsc_frequency_hv TraceGetTscFrequency
+#define dtrace_safememcpy       TraceAccessMemory
+#define dtrace_userstackwalk    TraceWalkUserStack
+#define dtrace_threadprivate    TraceGetCurrentThreadTracePrivate
+#define dtrace_priv_filter      TraceFilterAccess
+#define dtrace_lkd              TraceActionLiveKernelDump
+#define dtrace_tfreg            TraceGetTrapFrameRegister
+#define dtrace_tf               TraceGetTrapFrame
+#endif
+
+extern ULONGLONG dtrace_tsc_frequency_hv(void);
 extern int dtrace_safememcpy(void* sys, uintptr_t untr, size_t bytesize, size_t chunksize, int isread);
-extern ULONG dtrace_userstackwalk(ULONG limit, PVOID* stack);
+extern ULONG dtrace_userstackwalk(ULONG limit, PULONGLONG stack);
 extern PULONG_PTR dtrace_threadprivate(ULONG Index);
-extern void dtrace_priv_filter(KPROCESSOR_MODE PreviousMode, PBOOLEAN User, PBOOLEAN Kernel);
+extern void dtrace_priv_filter(KPROCESSOR_MODE PreviousMode, PBOOLEAN Kernel, PBOOLEAN User);
+extern ULONG_PTR dtrace_tfreg(/*PKTRAP_FRAME*/PVOID TrapFrame, ULONG RegisterIndex);
+extern /*PKTRAP_FRAME*/PVOID dtrace_tf(void);
+extern void dtrace_lkd(LPCWSTR ComponentName,
+                        ULONG BugCheckCode,
+                        ULONG_PTR P1,
+                        ULONG_PTR P2,
+                        ULONG_PTR P3,
+                        ULONG_PTR P4,
+                        ULONG Flags);
 
 

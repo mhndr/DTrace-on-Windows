@@ -39,6 +39,10 @@
 #include <dt_impl.h>
 #include <dt_printf.h>
 
+#ifdef _WIN32
+#include <dt_etw_trace.h>
+#endif
+
 static int
 dt_strdata_add(dtrace_hdl_t *dtp, dtrace_recdesc_t *rec, void ***data, int *max)
 {
@@ -110,6 +114,68 @@ dt_strdata_add(dtrace_hdl_t *dtp, dtrace_recdesc_t *rec, void ***data, int *max)
 
 	return (0);
 }
+
+#ifdef _WIN32
+
+static int
+dt_etwtrace_add(dtrace_hdl_t *dtp, dtrace_recdesc_t *rec, void ***data, int *max)
+{
+	int maxetw, rval;
+	dtrace_etwtracedesc_t trace;
+
+	if (rec->dtrd_etwtrace == 0)
+		return (0);
+
+	if (rec->dtrd_etwtrace <= *max &&
+		(*data)[rec->dtrd_etwtrace - 1] != NULL) {
+		return (0);
+	}
+
+	bzero(&trace, sizeof(trace));
+	trace.dtet_etwtrace = rec->dtrd_etwtrace;
+	trace.dtet_desc = NULL;
+	trace.dtet_length = 0;
+
+	if (dt_ioctl(dtp, DTRACEIOC_ETWTRACE, &trace) == -1)
+		return (dt_set_errno(dtp, errno));
+
+	if ((trace.dtet_desc = dt_alloc(dtp, trace.dtet_length)) == NULL)
+		return (dt_set_errno(dtp, EDT_NOMEM));
+
+	if (dt_ioctl(dtp, DTRACEIOC_ETWTRACE, &trace) == -1) {
+		rval = dt_set_errno(dtp, errno);
+		free(trace.dtet_desc);
+		return (rval);
+	}
+
+	while (rec->dtrd_etwtrace > (maxetw = *max)) {
+		int new_max = maxetw ? (maxetw << 1) : 1;
+		size_t nsize = new_max * sizeof (void *);
+		size_t osize = maxetw * sizeof (void *);
+		void **new_data = dt_zalloc(dtp, nsize);
+
+		if (new_data == NULL) {
+			dt_free(dtp, trace.dtet_desc);
+			return (dt_set_errno(dtp, EDT_NOMEM));
+		}
+
+		bcopy(*data, new_data, osize);
+		free(*data);
+
+		*data = new_data;
+		*max = new_max;
+	}
+
+	if (trace.dtet_desc == NULL)
+		return (-1);
+
+	dt_etw_trace_validate(trace.dtet_desc);
+	(*data)[rec->dtrd_etwtrace - 1] = trace.dtet_desc;
+
+	return (0);
+}
+
+#endif
 
 static int
 dt_epid_add(dtrace_hdl_t *dtp, dtrace_epid_t id)
@@ -225,6 +291,15 @@ dt_epid_add(dtrace_hdl_t *dtp, dtrace_epid_t id)
 				goto err;
 			}
 		}
+#ifdef _WIN32
+		else if (rec->dtrd_action == DTRACEACT_ETWTRACE) {
+			if (dt_etwtrace_add(dtp, rec, &dtp->dt_etw,
+				&dtp->dt_maxetw) != 0) {
+				rval = -1;
+				goto err;
+			}
+		}
+#endif
 
 	}
 
@@ -494,3 +569,33 @@ dt_strdata_destroy(dtrace_hdl_t *dtp)
 	free(dtp->dt_strdata);
 	dtp->dt_strdata = NULL;
 }
+
+#ifdef _WIN32
+
+void *
+dt_etw_lookup(dtrace_hdl_t *dtp, int idx)
+{
+	if (idx == 0 || idx > dtp->dt_maxetw)
+		return (NULL);
+
+	if (dtp->dt_etw == NULL)
+		return (NULL);
+
+	return (dtp->dt_etw[idx - 1]);
+}
+
+void
+dt_etw_destroy(dtrace_hdl_t * dtp)
+{
+	int i;
+
+	for (i = 0; i < dtp->dt_maxetw; i++) {
+		if (dtp->dt_etw[i] != NULL)
+			dt_etw_trace_destroy(dtp, dtp->dt_etw[i]);
+	}
+
+	free(dtp->dt_etw);
+	dtp->dt_etw = NULL;
+}
+
+#endif

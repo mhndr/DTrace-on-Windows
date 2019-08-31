@@ -43,6 +43,9 @@
 #ifndef illumos
 #include <libproc_compat.h>
 #endif
+#ifdef _WIN32
+#include <dt_etw_trace.h>
+#endif
 
 #define	DT_MASK_LO 0x00000000FFFFFFFFULL
 
@@ -2352,6 +2355,28 @@ dt_consume_cpu(dtrace_hdl_t *dtp, FILE *fp, int cpu,
 					return (-1);
 				goto nextrec;
 			}
+
+#if _WIN32
+			if (act == DTRACEACT_ETWTRACE) {
+				void *etwtrace;
+				if ((etwtrace = dt_etw_lookup(dtp,
+					rec->dtrd_etwtrace)) == NULL)
+					return (dt_set_errno(dtp, EDT_BADETWTRACE));
+
+				n = dt_etw_trace(dtp, fp, etwtrace, rec,
+					epd->dtepd_nrecs - i,
+					(uchar_t *)buf->dtbd_data + offs,
+					buf->dtbd_size - offs);
+
+				if (n < 0)
+					return (-1); /* errno is set for us */
+
+				if (n > 0)
+					i += n - 1;
+
+				goto nextrec;
+			}
+#endif
 
 			if (DTRACEACT_ISPRINTFLIKE(act)) {
 				void *fmtdata;
