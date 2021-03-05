@@ -875,6 +875,7 @@ prochandler(struct ps_prochandle *P, const char *msg, void *arg)
 	} else {
 		notice("pid %d has exited\n", pid);
 	}
+	g_pslive--;
 #else
 
 #ifdef illumos
