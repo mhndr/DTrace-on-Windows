@@ -366,7 +366,7 @@ dt_pragma_error(const char *prname, dt_node_t *dnp)
 			n += strlen(enp->dn_string) + 1;
 	}
 
-	s = alloca(n + 1);
+	s = alloca(n + 2);
 	s[0] = '\0';
 
 	for (enp = dnp; enp != NULL; enp = enp->dn_list) {

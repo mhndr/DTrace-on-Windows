@@ -51,9 +51,15 @@ static const char *_libctf_zlib = "/usr/lib/64/libz.so";
 static const char *_libctf_zlib = "/usr/lib/libz.so";
 #endif
 #endif
+#endif
 
 static struct {
+#ifdef _WIN32
+	int (*z_uncompress)(Bytef *dest,   uLongf *destLen,
+			    const Bytef *source, uLong sourceLen);
+#else
 	int (*z_uncompress)(uchar_t *, ulong_t *, const uchar_t *, ulong_t);
+#endif
 	const char *(*z_error)(int);
 	void *z_dlp;
 } zlib;
@@ -61,10 +67,12 @@ static struct {
 static size_t _PAGESIZE;
 static size_t _PAGEMASK;
 
+#ifndef _WIN32
 #ifdef illumos
 #pragma init(_libctf_init)
 #else
 void    _libctf_init(void) __attribute__ ((constructor));
+#endif
 #endif
 void
 _libctf_init(void)
@@ -128,7 +136,7 @@ ctf_zopen(int *errp)
 int
 z_uncompress(void *dst, size_t *dstlen, const void *src, size_t srclen)
 {
-	return (zlib.z_uncompress(dst, (ulong_t *)dstlen, src, srclen));
+	return (zlib.z_uncompress(dst, (uLongf*)dstlen, src, (uLong)srclen));
 }
 
 const char *
@@ -136,6 +144,8 @@ z_strerror(int err)
 {
 	return (zlib.z_error(err));
 }
+
+#ifndef _WIN32
 
 /*
  * Convert a 32-bit ELF file header into GElf.
@@ -176,6 +186,8 @@ shdr_to_gelf(const Elf32_Shdr *src, GElf_Shdr *dst)
 	dst->sh_addralign = src->sh_addralign;
 	dst->sh_entsize = src->sh_entsize;
 }
+
+#endif
 
 /*
  * In order to mmap a section from the ELF file, we must round down sh_offset
@@ -226,8 +238,10 @@ ctf_fdopen(int fd, int *errp)
 
 	union {
 		ctf_preamble_t ctf;
+#ifndef _WIN32
 		Elf32_Ehdr e32;
 		GElf_Ehdr e64;
+#endif
 	} hdr;
 
 	bzero(&ctfsect, sizeof (ctf_sect_t));
@@ -268,6 +282,8 @@ ctf_fdopen(int fd, int *errp)
 
 		return (fp);
 	}
+
+#ifndef _WIN32
 
 	/*
 	 * If we have read enough bytes to form an ELF header and the magic
@@ -459,6 +475,7 @@ bad:
 		(void) munmap(strs_map, strs_mapsz);
 		return (fp);
 	}
+#endif
 
 	return (ctf_set_open_errno(errp, ECTF_FMT));
 }
@@ -484,8 +501,6 @@ ctf_open(const char *filename, int *errp)
 	(void) close(fd);
 	return (fp);
 }
-
-#endif
 
 /*
  * Write the uncompressed CTF data stream to the specified file descriptor.

@@ -521,6 +521,8 @@ typedef struct dt_proc_control_data {
 static DWORD WINAPI
 dt_proc_control(void *arg)
 {
+	SetThreadDescription(GetCurrentThread(), L"dtrace_proc_control");
+
 	dt_proc_control_data_t *datap = arg;
 	dtrace_hdl_t *dtp = (dtrace_hdl_t *)*(volatile dtrace_hdl_t **)&datap->dpcd_hdl;
 	dt_proc_t *dpr = (dt_proc_t *)*(volatile dt_proc_t **)&datap->dpcd_proc;

@@ -78,7 +78,7 @@
 #define unput(c)					\
 	do {						\
 		int _c = c;				\
-		if (_c != EOF)				\
+		if ((_c != EOF) && (_c != 0))		\
 			yyunput(_c, yytext_ptr);	\
 	} while(0)
 #endif
@@ -110,7 +110,7 @@ static void unput(int);
 
 RGX_AGG		"@"[a-zA-Z_][0-9a-zA-Z_]*
 RGX_PSPEC	[-$:a-zA-Z_.?*\\\[\]!][-$:0-9a-zA-Z_.`?*\\\[\]!]*
-RGX_ALTIDENT	[a-zA-Z_][0-9a-zA-Z_]*
+RGX_PSPEC_ELEM [-$a-zA-Z_.?*\\\[\]!][-$0-9a-zA-Z_.`?*\\\[\]!]*
 RGX_LMID	LM[0-9a-fA-F]+`
 RGX_MOD_IDENT	[a-zA-Z_`][0-9a-z.A-Z_`]*`
 RGX_IDENT	[a-zA-Z_`][0-9a-zA-Z_`]*
@@ -157,6 +157,7 @@ if (yypcb->pcb_token != 0) {
 <S0>float	return (DT_KEY_FLOAT);
 <S0>for		return (DT_KEY_FOR);
 <S0>goto	return (DT_KEY_GOTO);
+<S0>__identifier	return (DT_KEY_IDENTIFIER);
 <S0>if		return (DT_KEY_IF);
 <S0>import	return (DT_KEY_IMPORT);
 <S0>inline	return (DT_KEY_INLINE);
@@ -653,6 +654,17 @@ if (yypcb->pcb_token != 0) {
 			if ((yylval.l_str = strdup(yytext)) == NULL)
 				longjmp(yypcb->pcb_jmpbuf, EDT_NOMEM);
 
+			return (DT_TOK_PSPEC);
+		}
+
+<S2>({RGX_PSPEC_ELEM})?:({RGX_PSPEC_ELEM})?:\"{RGX_STR}\":({RGX_PSPEC_ELEM})? {
+			/*
+			 * allow arbitrary quoted strings in the 'function' portion of a
+			 * fully-specified probe
+			 */
+			if ((yylval.l_str = strdup(yytext)) == NULL)
+				longjmp(yypcb->pcb_jmpbuf, EDT_NOMEM);
+			stresc2chr(yylval.l_str);
 			return (DT_TOK_PSPEC);
 		}
 

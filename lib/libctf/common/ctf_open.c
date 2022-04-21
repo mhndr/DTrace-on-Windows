@@ -647,9 +647,6 @@ ctf_bufopen(const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
 	 * the data section's buffer pointer into ctf_buf, below.
 	 */
 	if (hp.cth_flags & CTF_F_COMPRESS) {
-#ifdef _WIN32
-		assert(FALSE);
-#else
 		size_t srclen, dstlen;
 		const void *src;
 		int rc = Z_OK;
@@ -682,7 +679,6 @@ ctf_bufopen(const ctf_sect_t *ctfsect, const ctf_sect_t *symsect,
 		}
 
 		ctf_data_protect(base, size + hdrsz);
-#endif
 	} else {
 		base = (void *)ctfsect->cts_data;
 		buf = (uchar_t *)base + hdrsz;
@@ -931,16 +927,12 @@ ctf_close(ctf_file_t *fp)
 	ctf_free(fp->ctf_dthash, fp->ctf_dthashlen * sizeof (ctf_dtdef_t *));
 
 	if (fp->ctf_flags & LCTF_MMAP) {
-#ifdef _WIN32
-		assert(FALSE);
-#else
 		if (fp->ctf_data.cts_data != NULL)
 			ctf_sect_munmap(&fp->ctf_data);
 		if (fp->ctf_symtab.cts_data != NULL)
 			ctf_sect_munmap(&fp->ctf_symtab);
 		if (fp->ctf_strtab.cts_data != NULL)
 			ctf_sect_munmap(&fp->ctf_strtab);
-#endif
 	}
 
 	if (fp->ctf_data.cts_name != _CTF_NULLSTR &&

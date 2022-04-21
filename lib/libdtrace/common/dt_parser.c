@@ -282,16 +282,12 @@ dt_type_pointer(dtrace_typeinfo_t *tip)
 		return (0);
 	}
 
-#ifdef _WIN32
 	ptr = ctf_add_pointer(ctfp, CTF_ADD_ROOT, type);
-	if (ptr == CTF_ERR || ctf_update(ctfp) == CTF_ERR) {
-		dtp->dt_ctferr = ctf_errno(ctfp);
-		return (dt_set_errno(dtp, EDT_CTF));
+	if ((ptr != CTF_ERR) && (ctf_update(ctfp) != CTF_ERR)) {
+		tip->dtt_type = ptr;
+		return (0);
 	}
 
-	tip->dtt_type = ptr;
-	return (0);
-#else
 	if (yypcb->pcb_idepth != 0)
 		dmp = dtp->dt_cdefs;
 	else
@@ -316,7 +312,6 @@ dt_type_pointer(dtrace_typeinfo_t *tip)
 	tip->dtt_flags = bflags;
 
 	return (0);
-#endif
 }
 
 const char *
@@ -4813,7 +4808,7 @@ dt_printd(dt_node_t *dnp, FILE *fp, int depth)
 void
 dt_node_printr(dt_node_t *dnp, FILE *fp, int depth)
 {
-	char n[DT_TYPE_NAMELEN], buf[BUFSIZ], a[8];
+	char n[DT_TYPE_NAMELEN], buf[BUFSIZ + 1], a[8];
 	const dtrace_syminfo_t *dts;
 	const dt_idnode_t *inp;
 	dt_node_t *arg;

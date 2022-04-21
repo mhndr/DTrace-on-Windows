@@ -70,6 +70,7 @@ dtrace_xstr2desc(dtrace_hdl_t *dtp, dtrace_probespec_t spec,
 {
 	size_t off, len, vlen, wlen;
 	const char *p, *q, *v, *w;
+	int quotecount;
 
 	char buf[32]; /* for id_t as %d (see below) */
 
@@ -80,15 +81,41 @@ dtrace_xstr2desc(dtrace_hdl_t *dtp, dtrace_probespec_t spec,
 	p = s + strlen(s) - 1;
 
 	do {
-		for (len = 0; p >= s && *p != ':'; len++)
+		quotecount = 0;
+
+		for (len = 0; p >= s && (quotecount == 1 || *p != ':'); len++) {
+			if (*p == '\"') {
+				quotecount++;
+			}
 			p--; /* move backward until we find a delimiter */
+		}
 
 		q = p + 1;
+
+		/*
+		 * Make sure quotes are closed. Also, the quotes must entirely surround
+		 * an element of the probe tuple. If quote are present, strip out the
+		 * quotes.
+		 */
+
+		if (quotecount) {
+			if (quotecount != 2) {
+				return (dt_set_errno(dtp, EDT_BADSPCV));
+			}
+
+			if (*q != '\"' || q[len - 1] != '\"') {
+				return (dt_set_errno(dtp, EDT_BADSPCV));
+			}
+
+			q++;
+			len -= 2;
+		}
+
 		vlen = 0;
 		w = NULL;
 		wlen = 0;
 
-		if ((v = strchr(q, '$')) != NULL && v < q + len) {
+		if (!quotecount && (v = strchr(q, '$')) != NULL && v < q + len) {
 			/*
 			 * Set vlen to the length of the variable name and then
 			 * reset len to the length of the text prior to '$'. If

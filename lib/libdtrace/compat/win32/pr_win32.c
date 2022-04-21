@@ -98,6 +98,8 @@ struct pw32_dbgthread_context {
 
 static DWORD CALLBACK pw32_dbgthread(PVOID param)
 {
+    SetThreadDescription(GetCurrentThread(), L"dtrace_dbgthread");
+
     struct pw32_dbgthread_context* ctx = (struct pw32_dbgthread_context*)param;
     struct proc_handle* ph = ctx->ph;
     DEBUG_EVENT dbge;
@@ -626,6 +628,24 @@ static BOOL CALLBACK pw32_iter_symbyaddr_SymEnumSymbolsProc(PSYMBOL_INFO pSymInf
         return TRUE;
     }
 
+    //
+    // dbghelp may put zero as size of the symbol.
+    // This code will adjust the length to extend to the end of the module.
+    //
+
+    if ((0 == pSymInfo->Size) && (pSymInfo->Address > pSymInfo->ModBase)) {
+        IMAGEHLP_MODULE64 info;
+        ZeroMemory(&info, sizeof(info));
+        info.SizeOfStruct = sizeof(info);
+        if (SymGetModuleInfo64(ctx->phdl->hproc, pSymInfo->ModBase, &info) &&
+            (info.BaseOfImage == pSymInfo->ModBase)) {
+            DWORD64 offset = pSymInfo->Address - pSymInfo->ModBase;
+            if (offset < info.ImageSize) {
+                pSymInfo->Size = (DWORD)(info.ImageSize - offset);
+            }
+        }
+    }
+
     sym.st_value = pSymInfo->Address;
     sym.st_namep = pSymInfo->Name;
     sym.st_size = pSymInfo->Size;
@@ -786,7 +806,7 @@ int proc_addr2sym(struct proc_handle *phdl, uintptr_t addr, char *buf,
 
     if (0 != size) {
         size -= 1;
-        if (size < Sym.Info.NameLen) {
+        if (size > Sym.Info.NameLen) {
             size = Sym.Info.NameLen;
         }
 

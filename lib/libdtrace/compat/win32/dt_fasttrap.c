@@ -55,7 +55,7 @@ dt_pid_create_entry_probe(struct ps_prochandle *P, dtrace_hdl_t *dtp,
     if (ioctl(dtp->dt_ftfd, FASTTRAPIOC_MAKEPROBE, ftp) != 0) {
         dt_dprintf("fasttrap probe creation ioctl failed: %s\n",
                    strerror(errno));
-        return (dt_set_errno(dtp, errno));
+        return (0);
     }
 
     return (1);
@@ -110,7 +110,7 @@ dt_pid_create_return_probe(struct ps_prochandle *P, dtrace_hdl_t *dtp,
         if (ioctl(dtp->dt_ftfd, FASTTRAPIOC_MAKEPROBE, ftp) != 0) {
             dt_dprintf("fasttrap probe creation ioctl failed: %s\n",
                        strerror(errno));
-            return (dt_set_errno(dtp, errno));
+            return (0);
         }
     }
 
@@ -169,7 +169,7 @@ dt_pid_create_offset_probe(struct ps_prochandle *P, dtrace_hdl_t *dtp,
         if (ioctl(dtp->dt_ftfd, FASTTRAPIOC_MAKEPROBE, ftp) != 0) {
             dt_dprintf("fasttrap probe creation ioctl failed: %s\n",
                        strerror(errno));
-            return (dt_set_errno(dtp, errno));
+            return (0);
         }
     }
 
@@ -246,7 +246,7 @@ dt_pid_create_glob_offset_probes(struct ps_prochandle *P, dtrace_hdl_t *dtp,
         if (ioctl(dtp->dt_ftfd, FASTTRAPIOC_MAKEPROBE, ftp) != 0) {
             dt_dprintf("fasttrap probe creation ioctl failed: %s\n",
                        strerror(errno));
-            return (dt_set_errno(dtp, errno));
+            return (0);
         }
     }
 

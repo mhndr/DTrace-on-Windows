@@ -255,6 +255,7 @@ C_ASSERT(EALREADY == 103);
 #define MAP_FAILED ((void*)-1)
 
 #define SHT_PROGBITS 1
+#define SHF_ALLOC    1
 
 //
 // CRT name redirection and extra routined not available in MS CRT.
@@ -270,6 +271,7 @@ typedef int64_t off64_t;
 #define read _read
 #define write _write
 #define fstat _fstat
+#define fstat64 _fstat64
 #define strcasecmp _stricmp
 #define strdup _strdup
 #define strlcat(d, s, l) strcat_s((d), (l), (s))
@@ -280,11 +282,13 @@ typedef int64_t off64_t;
 #define strtoull _strtoui64
 #define fileno _fileno
 #define stat _stat
+#define stat64 _stat64
+#define mmap mmap64
 
-extern void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+extern void *mmap64(void *addr, size_t length, int prot, int flags, int fd, size_t offset);
 extern int munmap(void *addr, size_t length);
 extern int mprotect(void *addr, size_t len, int prot);
-
+extern ssize_t pread64(int fd, void *buf, size_t count, size_t offset);
 extern char *strndup(const char *s, size_t n);
 extern char *strdupa(const char *s);
 extern size_t strlcpy(char * dst, const char * src, size_t dstsize);
@@ -348,6 +352,8 @@ int p_online(processorid_t processorid, int flag);
 #define _SC_CPUID_MAX           123
 #define _SC_NPROCESSORS_MAX     124
 extern long sysconf(int name);
+
+extern int getpagesize(void);
 
 //
 // getopt package.
@@ -413,9 +419,12 @@ extern void kmem_cache_destroy(struct kmem_cache *cachep);
 // Error reporting.
 //
 
-#define CE_WARN 1
-#define CE_NOTE 2
-extern void cmn_err(int level, char *format, ...);
+#define CE_WARN DPFLTR_WARNING_LEVEL
+#define CE_NOTE DPFLTR_TRACE_LEVEL
+
+#define cmn_err(level, format, ...) \
+        DbgPrintEx(DPFLTR_DEFAULT_ID, level, format, __VA_ARGS__)
+
 extern volatile const char* panicstr;
 
 //

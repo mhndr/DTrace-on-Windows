@@ -840,6 +840,38 @@ ctf_add_function(ctf_file_t *fp, uint_t flag,
 	return (type);
 }
 
+int
+ctf_set_size(ctf_file_t *fp, ctf_id_t souid, size_t size)
+{
+	ctf_dtdef_t *dtd = ctf_dtd_lookup(fp, souid);
+	ssize_t ssize;
+	uint_t kind;
+
+	if (!(fp->ctf_flags & LCTF_RDWR))
+		return (ctf_set_errno(fp, ECTF_RDONLY));
+
+	if (dtd == NULL)
+		return (ctf_set_errno(fp, ECTF_BADID));
+
+	kind = CTF_INFO_KIND(dtd->dtd_data.ctt_info);
+
+	if (kind != CTF_K_STRUCT && kind != CTF_K_UNION)
+		return (ctf_set_errno(fp, ECTF_NOTSOU));
+
+	ssize = ctf_get_ctt_size(fp, &dtd->dtd_data, NULL, NULL);
+	ssize = MAX(ssize, size);
+
+	if (ssize > CTF_MAX_SIZE) {
+		dtd->dtd_data.ctt_size = CTF_LSIZE_SENT;
+		dtd->dtd_data.ctt_lsizehi = CTF_SIZE_TO_LSIZE_HI(ssize);
+		dtd->dtd_data.ctt_lsizelo = CTF_SIZE_TO_LSIZE_LO(ssize);
+	} else
+		dtd->dtd_data.ctt_size = (ushort_t)ssize;
+
+	fp->ctf_flags |= LCTF_DIRTY;
+	return (0);
+}
+
 ctf_id_t
 ctf_add_struct(ctf_file_t *fp, uint_t flag, const char *name)
 {

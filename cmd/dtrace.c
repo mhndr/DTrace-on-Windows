@@ -125,7 +125,7 @@ NULL };
 #endif
 
 static const char DTRACE_OPTSTR[] =
-	"3:6:aAb:Bc:CD:ef:FGhHi:I:lL:m:n:o:p:P:qs:SU:vVwx:X:y:Z";
+	"3:6:aAb:Bc:CD:ef:FGhHi:I:lL:m:n:o:p:P:qs:SU:vVwx:X:Yy:Z";
 
 static int
 usage(FILE *fp)
@@ -875,6 +875,7 @@ prochandler(struct ps_prochandle *P, const char *msg, void *arg)
 	} else {
 		notice("pid %d has exited\n", pid);
 	}
+
 	g_pslive--;
 #else
 
@@ -1352,7 +1353,7 @@ installsighands(void)
 
 #ifdef _WIN32
 	SetConsoleCtrlHandler(consolecontrolhandler, TRUE);
-	unhandledexceptionfilter_org = 
+	unhandledexceptionfilter_org =
 	    SetUnhandledExceptionFilter(unhandledexceptionfilter);
 #else
 	struct sigaction act, oact;
@@ -1443,6 +1444,56 @@ enable_privileges(void)
 
 #endif
 
+static char*
+get_default_sympath(void)
+{
+#ifdef _WIN32
+	const struct {
+		HKEY hk;
+		PCSTR path;
+	} reg[] = {
+		{
+			HKEY_CURRENT_USER,
+			"Environment"
+		},
+		{
+			HKEY_LOCAL_MACHINE,
+			"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment"
+		}
+	};
+	const PCSTR val[] = {
+		"_NT_ALT_SYMBOL_PATH",
+		"_NT_SYMBOL_PATH"
+	};
+
+	for (int i = 0; i < _countof(reg); i += 1) {
+		for (int j = 0; j < _countof(val); j += 1) {
+			LSTATUS err;
+			DWORD cb = 0;
+
+			err = RegGetValueA(reg[i].hk, reg[i].path, val[j],
+			                   RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ,
+			                   NULL, NULL, &cb);
+			if (NO_ERROR != err || 0 == cb)
+				continue;
+
+			char* data = malloc(cb);
+			if (NULL == data)
+				fatal("failed to allocate memory for symbol path");
+
+			err = RegGetValueA(reg[i].hk, reg[i].path, val[j],
+			                   RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ,
+			                   NULL, data, &cb);
+			if (NO_ERROR != err)
+				fatal("failed to query symbol path");
+
+			return data;
+		}
+	}
+#endif
+
+	return NULL;
+}
 
 int
 #ifdef _MSC_VER
@@ -1819,6 +1870,15 @@ main(int argc, char *argv[])
 			case 'y':
 				if (dtrace_setopt(g_dtp, "sympath", optarg) != 0)
 					dfatal("failed to set -y %s", optarg);
+				break;
+
+			case 'Y':
+				char *sympath = get_default_sympath();
+				if (sympath) {
+					if (dtrace_setopt(g_dtp, "sympath", sympath) != 0)
+						dfatal("failed to set -y %s", sympath);
+					free(sympath);
+				}
 				break;
 
 			case 'Z':

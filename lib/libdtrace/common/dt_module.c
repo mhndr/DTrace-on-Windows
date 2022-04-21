@@ -71,6 +71,7 @@
 #include <cvconst.h>
 #include <oaidl.h>
 
+extern IMAGE_DOS_HEADER __ImageBase;
 
 struct dt_strmap_table_entry {
     struct dt_strmap_table_entry* next;
@@ -254,6 +255,7 @@ dt_module_syminit(dt_module_t *dmp)
 						      0,
 						      NULL,
 						      0);
+
 		if (RedirectionDisabled) {
 			Wow64RevertWow64FsRedirection(OldRedirectionDisabled);
 		}
@@ -316,7 +318,7 @@ dt_module_symlookup(dt_module_t *dmp, GElf_Addr addr, const char *name,
 		return NULL;
 	}
 
-	symp->st_value = dmp->dm_image_base + (sym.s.Address - sym.s.ModBase);
+	symp->st_value = sym.s.Address;
 	symp->st_size = sym.s.Size;
 	symp->st_type_idx = sym.s.TypeIndex;
 	symp->st_tag = sym.s.Tag;
@@ -379,7 +381,7 @@ dt_module_import_basetype(dt_module_t *dmp, ULONG typeIdx)
 	ctf_encoding_t enc = {0};
 	uint_t kind;
 	char* name;
-        int sign = 0;
+	int sign = 0;
 
 	if (!SymGetTypeInfo(dmp->dm_prochandle, dmp->dm_symbol_base, typeIdx,
 			    TI_GET_BASETYPE, &baseType)) {
@@ -432,20 +434,20 @@ dt_module_import_basetype(dt_module_t *dmp, ULONG typeIdx)
 			break;
 
 		case 1:
-			name = sign ? "char" : "unsigned char";
+			name = sign ? "Int8" : "UInt8";
 			enc.cte_format |= CTF_INT_CHAR;
 			break;
 
 		case 2:
-			name = sign ? "short" : "unsigned short";
+			name = sign ? "Int16" : "UInt16";
 			break;
 
 		case 4:
-			name = sign ? "long" : "unsigned long";
+			name = sign ? "Int32" : "UInt32";
 			break;
 
 		case 8:
-			name = sign ? "long long" : "unsigned long long";
+			name = sign ? "Int64" : "UInt64";
 			break;
 
 		default:
@@ -518,6 +520,11 @@ dt_module_import_basetype(dt_module_t *dmp, ULONG typeIdx)
 		goto exit;
 	}
 
+	/* Ensure all imported basic types have associated pointer type. */
+	if (CTF_ERR == ctf_type_pointer(dmp->dm_ctfp, symIdx)) {
+		ctf_add_pointer(dmp->dm_ctfp, CTF_ADD_ROOT, symIdx);
+	}
+
 exit:
 	return symIdx;
 }
@@ -570,6 +577,7 @@ dt_module_import_udt(dt_module_t *dmp, ULONG typeIdx)
 	ULONG i;
 	ULONG udtKind;
 	ULONG64 offset;
+	ULONG64 sizeUdt;
 
 	symName = dt_module_symbol_name(dmp, typeIdx, &nameStorage);
 
@@ -663,6 +671,12 @@ dt_module_import_udt(dt_module_t *dmp, ULONG typeIdx)
 
 		LocalFree(nameStorage);
 		nameStorage = NULL;
+	}
+
+	if (SymGetTypeInfo(dmp->dm_prochandle, dmp->dm_symbol_base, typeIdx,
+			    TI_GET_LENGTH, &sizeUdt)) {
+
+		ctf_set_size(dmp->dm_ctfp, symIdx, (size_t)sizeUdt);
 	}
 
 exit:
@@ -778,6 +792,7 @@ dt_module_import_function(dt_module_t *dmp, ULONG typeIdx)
 	ULONG paramTypeIdx;
 	ULONG i;
 	ULONG baseType;
+	ULONG thisTypeId = 0;
 
 	if (!SymGetTypeInfo(dmp->dm_prochandle, dmp->dm_symbol_base, typeIdx,
 			    TI_GET_TYPEID, &typeIdxReturn)) {
@@ -799,11 +814,6 @@ dt_module_import_function(dt_module_t *dmp, ULONG typeIdx)
 	}
 
 	if (0 != paramCount) {
-		paramsIdx = malloc(paramCount * sizeof(ctf_id_t));
-		if (NULL == paramsIdx) {
-			goto exit;
-		}
-
 		params = malloc(sizeof(TI_FINDCHILDREN_PARAMS) + paramCount * sizeof(ULONG));
 		if (NULL == params) {
 			goto exit;
@@ -811,15 +821,49 @@ dt_module_import_function(dt_module_t *dmp, ULONG typeIdx)
 
 		params->Count = paramCount;
 		params->Start = 0;
+	}
 
-		if (!SymGetTypeInfo(dmp->dm_prochandle, dmp->dm_symbol_base, typeIdx,
-				    TI_FINDCHILDREN, params)) {
-			dt_dprintf("failed to get params for function type %d in '%s'\n",
-				   typeIdx, dmp->dm_file);
+	/*
+	 * This local definition exists so that dtrace can build with SDKs not containing
+	 * the new IMAGEHLP_SYMBOL_TYPE_INFO definition. This query fails gracefully
+	 * with older versions of dbghelp.dll.
+     */
+#define TI_GET_OBJECTPOINTERTYPE 34
+
+	if (SymGetTypeInfo(dmp->dm_prochandle, dmp->dm_symbol_base, typeIdx,
+			    (IMAGEHLP_SYMBOL_TYPE_INFO)TI_GET_OBJECTPOINTERTYPE, &thisTypeId) &&
+		thisTypeId) {
+
+		paramCount += 1;
+	}
+
+	if (0 != paramCount) {
+		ULONG outIdx = 0;
+
+		paramsIdx = malloc(paramCount * sizeof(ctf_id_t));
+		if (NULL == paramsIdx) {
 			goto exit;
 		}
 
-		for (i = 0; i < paramCount; i++) {
+		if (thisTypeId) {
+			paramsIdx[outIdx] = dt_module_import_type(dmp, NULL, thisTypeId);
+			if (CTF_ERR == paramsIdx[outIdx]) {
+				goto exit;
+			}
+
+			outIdx++;
+		}
+
+		if (params->Count) {
+			if (!SymGetTypeInfo(dmp->dm_prochandle, dmp->dm_symbol_base, typeIdx,
+								TI_FINDCHILDREN, params)) {
+				dt_dprintf("failed to get params for function type %d in '%s'\n",
+						   typeIdx, dmp->dm_file);
+				goto exit;
+			}
+		}
+
+		for (i = 0; i < params->Count; i++) {
 			param = params->ChildId[i];
 			if (!SymGetTypeInfo(dmp->dm_prochandle, dmp->dm_symbol_base, param,
 					    TI_GET_TYPEID, &paramTypeIdx)) {
@@ -828,7 +872,7 @@ dt_module_import_function(dt_module_t *dmp, ULONG typeIdx)
 				goto exit;
 			}
 
-			if (((i + 1) == paramCount) &&
+			if (((i + 1) == params->Count) &&
 			    SymGetTypeInfo(dmp->dm_prochandle, dmp->dm_symbol_base, paramTypeIdx,
 					   TI_GET_BASETYPE, &baseType) &&
 			    (btNoType == baseType)) {
@@ -838,10 +882,12 @@ dt_module_import_function(dt_module_t *dmp, ULONG typeIdx)
 				break;
 			}
 
-			paramsIdx[i] = dt_module_import_type(dmp, NULL, paramTypeIdx);
-			if (CTF_ERR == paramsIdx[i]) {
+			paramsIdx[outIdx] = dt_module_import_type(dmp, NULL, paramTypeIdx);
+			if (CTF_ERR == paramsIdx[outIdx]) {
 				goto exit;
 			}
+
+			outIdx++;
 		}
 	}
 
@@ -1124,8 +1170,11 @@ dt_module_import_type(dt_module_t *dmp, const char *name, ULONG typeIdx)
 		symIdx = dt_module_import_enum(dmp, typeIdx);
 		break;
 
+	case SymTagVTableShape:
+		goto exit;
+
 	default:
-		dt_dprintf("unsupported tag %04lx\n", symTag);
+		dt_dprintf("unsupported tag %04ld\n", symTag);
 		goto exit;
 	}
 
@@ -1138,19 +1187,55 @@ exit:
 	return symIdx;
 }
 
+struct dt_module_enumtypes_context {
+	dt_module_t *dmp;
+	int succeeded;
+	int failed;
+};
+
 static BOOL CALLBACK
 dt_module_enumtypes_proc(PSYMBOL_INFO SymInfo, ULONG  SymbolSize, PVOID UserContext)
 {
-	dt_module_t *dmp = (dt_module_t *)UserContext;
-	dt_module_import_type(dmp, NULL, SymInfo->TypeIndex);
+	dt_dprintf("Importing type %02lx: %s\n", SymInfo->Tag, SymInfo->Name);
+
+	struct dt_module_enumtypes_context* ctx =
+		(struct dt_module_enumtypes_context*)UserContext;
+	ctf_id_t tid = dt_module_import_type(ctx->dmp, NULL, SymInfo->TypeIndex);
+	if (CTF_ERR != tid) {
+		ctx->succeeded += 1;
+	} else {
+		ctx->failed += 1;
+	}
+
 	return TRUE;
 }
 
-static int
-dt_module_import_types(dt_module_t *dmp)
+int
+dt_module_import_types(dt_module_t *dmp, const char* mask, int* succeeded, int* failed)
 {
-	SymEnumTypes(dmp->dm_prochandle, dmp->dm_symbol_base,
-		     dt_module_enumtypes_proc, dmp);
+	*succeeded = *failed = 0;
+
+	if (!dt_module_syminit(dmp)) {
+		return -1;
+	}
+
+	struct dt_module_enumtypes_context ctx = {0};
+	ctx.dmp = dmp;
+
+	if (NULL == mask) {
+		if (!SymEnumTypes(dmp->dm_prochandle, dmp->dm_symbol_base,
+					dt_module_enumtypes_proc, &ctx)) {
+			return -1;
+		}
+	} else {
+		if (!SymEnumTypesByName(dmp->dm_prochandle, dmp->dm_symbol_base,
+					mask, dt_module_enumtypes_proc, &ctx)) {
+			return -1;
+		}
+	}
+
+	*succeeded = ctx.succeeded;
+	*failed = ctx.failed;
 	return 0;
 }
 
@@ -1171,6 +1256,34 @@ dt_module_function_typeid(dt_module_t *dmp, const char *name)
 		return CTF_ERR;
 
 	return dt_module_import_type(dmp, NULL, sym.st_type_idx);
+}
+
+static
+ctf_file_t*
+dt_module_open_system_ctf(void)
+{
+	HMODULE hm = (HMODULE)&__ImageBase;
+	HRSRC rc = FindResourceExA(hm,"CTF", "OS", 0);
+	if (NULL == rc) {
+		return NULL;
+	}
+
+	HGLOBAL rh = LoadResource(hm, rc);
+	if (NULL == rh) {
+		return NULL;
+	}
+
+	void* rd = LockResource(rh);
+	if (NULL == rd) {
+		return NULL;
+	}
+
+	DWORD cb = SizeofResource(hm, rc);
+	ctf_sect_t sect = {0};
+	sect.cts_data = rd;
+	sect.cts_size = cb;
+	int ce;
+	return ctf_bufopen(&sect, NULL, NULL, &ce);
 }
 
 #else
@@ -1943,7 +2056,7 @@ static BOOL CALLBACK dt_module_load_proc_EnumModulesCallback(PCSTR ModuleName, D
 			return TRUE;
 		}
 		ctx->dpa_dmp->dm_pidmods = newp;
-                ctx->dpa_allocated += incr;
+		ctx->dpa_allocated += incr;
 	}
 
 	if ((dmp = malloc(sizeof (dt_module_t))) == NULL) {
@@ -2542,7 +2655,7 @@ static void
 #ifdef illumos
 dt_module_update(dtrace_hdl_t *dtp, const char *name)
 #elif defined(_WIN32)
-dt_module_update(dtrace_hdl_t *dtp, void* base_address)
+dt_module_update(dtrace_hdl_t *dtp, void* base_address, BOOL isKernel)
 #else
 dt_module_update(dtrace_hdl_t *dtp, struct kld_file_stat *k_stat)
 #endif
@@ -2594,7 +2707,7 @@ dt_module_update(dtrace_hdl_t *dtp, struct kld_file_stat *k_stat)
 	else
 		name += 1;
 
-	if (!strcmp(name, "ntoskrnl.exe")) {
+	if (!strcmp(name, "ntoskrnl.exe") || isKernel) {
 		name = "nt";
 	}
 
@@ -2919,8 +3032,11 @@ dtrace_update(dtrace_hdl_t *dtp)
 	}
 
 	if (driver_bases) {
+		/* The first driver module reported should be the kernel */
+		BOOL isKernel = TRUE;
 		for (i = 0; i < cb / sizeof(void*); i++) {
-			dt_module_update(dtp, driver_bases[i]);
+			dt_module_update(dtp, driver_bases[i], isKernel);
+			isKernel = FALSE;
 		}
 		free(driver_bases);
 	}
@@ -2935,6 +3051,18 @@ dtrace_update(dtrace_hdl_t *dtp)
 #ifdef _WIN32
 	dt_idhash_lookup(dtp->dt_macros, "pid")->di_id = GetCurrentProcessId();
 	dtp->dt_exec = dt_module_lookup_by_name(dtp, "nt");
+	dtp->dt_rtld = dt_module_lookup_by_name(dtp, "OS");
+	if (NULL == dtp->dt_rtld) {
+		dtp->dt_rtld = dt_module_create(dtp, "OS");
+		if (NULL != dtp->dt_rtld) {
+			dtp->dt_rtld->dm_ctfp = dt_module_open_system_ctf();
+			if (NULL != dtp->dt_rtld->dm_ctfp) {
+				ctf_setspecific(dtp->dt_rtld->dm_ctfp, dtp->dt_rtld);
+				dtp->dt_rtld->dm_flags = DT_DM_LOADED;
+				dtp->dt_rtld->dm_modid = -1;
+			}
+		}
+	}
 #else
 	dt_idhash_lookup(dtp->dt_macros, "egid")->di_id = getegid();
 	dt_idhash_lookup(dtp->dt_macros, "euid")->di_id = geteuid();
@@ -2990,7 +3118,6 @@ dt_module_from_object(dtrace_hdl_t *dtp, const char *object)
 		dmp = dtp->dt_rtld;
 		break;
 	case (uintptr_t)DTRACE_OBJ_CDEFS:
-
 		dmp = dtp->dt_cdefs;
 		break;
 	case (uintptr_t)DTRACE_OBJ_DDEFS:
@@ -3230,6 +3357,9 @@ dtrace_lookup_by_type(dtrace_hdl_t *dtp, const char *object, const char *name,
 #ifdef _WIN32
 			if (CTF_ERR == id && justone) {
 				id = dt_module_import_type(dmp, name, 0);
+				if (CTF_ERR == id && dmp == dtp->dt_exec) {
+					return dtrace_lookup_by_type(dtp, DTRACE_OBJ_RTLD, name, tip);
+				}
 			}
 #endif
 			fp = dmp->dm_ctfp;
@@ -3283,6 +3413,7 @@ dtrace_lookup_by_type(dtrace_hdl_t *dtp, const char *object, const char *name,
 #endif
 			}
 		}
+
 		if (id != CTF_ERR) {
 			tip->dtt_object = dmp->dm_name;
 			tip->dtt_ctfp = fp;

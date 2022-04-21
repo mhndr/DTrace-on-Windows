@@ -226,6 +226,8 @@ extern ctf_id_t ctf_add_struct(ctf_file_t *, uint_t, const char *);
 extern ctf_id_t ctf_add_union(ctf_file_t *, uint_t, const char *);
 extern ctf_id_t ctf_add_volatile(ctf_file_t *, uint_t, ctf_id_t);
 
+extern int ctf_set_size(ctf_file_t *, ctf_id_t, size_t);
+
 extern int ctf_add_enumerator(ctf_file_t *, ctf_id_t, const char *, int);
 extern int ctf_add_member(ctf_file_t *, ctf_id_t, const char *, ctf_id_t);
 extern int ctf_add_member_at(ctf_file_t *fp, ctf_id_t souid, const char *name, ctf_id_t type, size_t off);

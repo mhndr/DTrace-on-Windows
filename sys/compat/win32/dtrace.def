@@ -10,6 +10,8 @@ EXPORTS
     dtrace_probe_arg
     dtrace_probe
 
+    dtrace_module_unloaded
+
     dtrace_meta_register
     dtrace_meta_unregister
 

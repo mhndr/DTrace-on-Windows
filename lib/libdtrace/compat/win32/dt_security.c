@@ -254,6 +254,7 @@ dtw32_get_execution_policy_for_scope (
                                  &type,
                                  (PBYTE)&buf[0],
                                  &bufSize);
+        RegCloseKey(hk);
 
         if (ERROR_FILE_NOT_FOUND == error) {
             buf[0] = '\0';
