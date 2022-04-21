@@ -72,10 +72,10 @@ tick-1ms
 	if (found == 0)
 	{
 		eprocess_ptr = (struct nt`_EPROCESS *)(curptr - offsetof(nt`_EPROCESS, ActiveProcessLinks));
-		processid = (string) eprocess_ptr->ImageFileName;
+		file_name = (string) eprocess_ptr->ImageFileName;
 
 
-		if ($1 == processid)
+		if ($1 == file_name)
 		{
 			found = 1;
 		}
