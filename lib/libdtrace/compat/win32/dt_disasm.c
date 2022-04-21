@@ -1173,7 +1173,7 @@ static void dt_disasm_instr_analyze_bl(
 {
     uint32_t imm = instr & 0x03ffffff; // 0,23
     uint32_t is_link = instr & 0x80000000;
-    idesc->BranchAddress = dt_disasm_sign_extend(imm * 4, 64) - 4;
+    idesc->BranchAddress = dt_disasm_sign_extend(imm * 4, 25) - 4;
     idesc->NoFallThrouth = is_link ? 0 : 1;
     idesc->IsBranch = 1;
     idesc->RelativeBranchTarget = 1;
@@ -1185,7 +1185,7 @@ static void dt_disasm_instr_analyze_bc(
     struct dt_disasm_instr_descr* idesc)
 {
     uint32_t imm = (instr >> 5) & 0x0007ffff; // 5..19
-    idesc->BranchAddress = dt_disasm_sign_extend(imm * 4, 64) - 4;
+    idesc->BranchAddress = dt_disasm_sign_extend(imm * 4, 21) - 4;
     idesc->IsBranch = 1;
     idesc->RelativeBranchTarget = 1;
     return;
@@ -1196,7 +1196,7 @@ static void dt_disasm_instr_analyze_cb(
     struct dt_disasm_instr_descr* idesc)
 {
     uint32_t imm = (instr >> 5) & 0x0007ffff; // 5,19
-    idesc->BranchAddress = dt_disasm_sign_extend(imm * 4, 64) - 4;
+    idesc->BranchAddress = dt_disasm_sign_extend(imm * 4, 21) - 4;
     idesc->IsBranch = 1;
     idesc->RelativeBranchTarget = 1;
     return;
@@ -1207,7 +1207,7 @@ static void dt_disasm_instr_analyze_tb(
     struct dt_disasm_instr_descr* idesc)
 {
     uint32_t imm = (instr >> 5) & 0x00003fff; // 5,14
-    idesc->BranchAddress = dt_disasm_sign_extend(imm * 4, 64) - 4;
+    idesc->BranchAddress = dt_disasm_sign_extend(imm * 4, 16) - 4;
     idesc->IsBranch = 1;
     idesc->RelativeBranchTarget = 1;
     return;

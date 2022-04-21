@@ -301,7 +301,8 @@ typedef struct _TRACE_SYM_REQUEST {
     struct {
         ULONG DbgInfoPresent    :  1;  // 1 when PDB GUID and Age fields present.
         ULONG ReturnSingleEntry :  1;  // 1 to fill no more than one entry.
-        ULONG Reserved          : 30;
+        ULONG IsNtosKrnl        :  1;  // 1 if the symbol corresponds to the kernel (should be called 'nt').
+        ULONG Reserved          : 29;
     } Flags;
     ULONGLONG ModuleBase;    // Base of the target module.
     // GUID PdbGuid;         // When DbgInfoPresent == 1

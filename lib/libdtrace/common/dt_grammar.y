@@ -84,6 +84,7 @@
 %token	DT_KEY_FLOAT
 %token	DT_KEY_FOR
 %token	DT_KEY_GOTO
+%token	DT_KEY_IDENTIFIER
 %token	DT_KEY_IF
 %token	DT_KEY_IMPORT
 %token	DT_KEY_INLINE
@@ -211,6 +212,7 @@
 %type	<l_tok>		struct_or_union
 
 %type	<l_str>		dtrace_keyword_ident
+%type	<l_str>		identifier_expression
 
 %%
 
@@ -390,6 +392,7 @@ argument_expression_list:
 
 primary_expression:
 		DT_TOK_IDENT { $$ = dt_node_ident($1); }
+	|	identifier_expression { $$ = dt_node_ident($1); }
 	|	DT_TOK_AGG { $$ = dt_node_ident($1); }
 	|	DT_TOK_INT { $$ = dt_node_int($1); }
 	|	DT_TOK_STRING { $$ = dt_node_string($1); }
@@ -677,6 +680,7 @@ type_specifier:	DT_KEY_VOID { $$ = dt_decl_spec(CTF_K_INTEGER, DUP("void")); }
 			$$ = dt_decl_spec(CTF_K_TYPEDEF, DUP("string"));
 		}
 	|	DT_TOK_TNAME { $$ = dt_decl_spec(CTF_K_TYPEDEF, $1); }
+	|	identifier_expression { $$ = dt_decl_spec(CTF_K_TYPEDEF, $1); }
 	|	struct_or_union_specifier
 	|	enum_specifier
 	;
@@ -882,4 +886,7 @@ dtrace_keyword_ident:
 	| DT_KEY_XLATOR { $$ = DUP("translator"); }
 	;
 
+identifier_expression:
+	  DT_KEY_IDENTIFIER DT_TOK_LPAR DT_TOK_STRING DT_TOK_RPAR { $$ = $3; }
+	;
 %%

@@ -30,3 +30,9 @@
 #define VER_ORIGINALFILENAME_STR    "dtrace.dll"
 
 #include <common.ver>
+
+#ifdef DTRACE_CTF
+OS CTF DTRACE_CTF
+#endif
+
+

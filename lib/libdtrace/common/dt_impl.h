@@ -350,7 +350,7 @@ struct dtrace_hdl {
 #endif
 	int dt_fd;		/* file descriptor for dtrace pseudo-device */
 #ifdef _WIN32
-	struct dt_symsvr* dt_symsvr; /* symbol server for fbt provider support */
+	struct dt_symsrv* dt_symsrv; /* symbol server for fbt provider support */
 #endif
 	int dt_ftfd;		/* file descriptor for fasttrap pseudo-device */
 	int dt_fterr;		/* saved errno from failed open of dt_ftfd */
@@ -616,8 +616,7 @@ enum {
 };
 
 #ifdef _WIN32
-extern struct dt_symsvr* dt_symsvr_start(void);
-extern void dt_symsvr_stop(struct dt_symsvr*);
+#include <dt_symsrv.h>
 extern int dt_execution_policy(FILE** fp, char** s);
 #endif
 

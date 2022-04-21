@@ -114,6 +114,7 @@ int dtrace_cpusup_init(void)
     NCPU = KeQueryMaximumProcessorCountEx(ALL_PROCESSOR_GROUPS);
 
     cb = NCPU * sizeof(cpu_core_t);
+    #pragma warning( suppress : 4996 )
     cpu_core = ExAllocatePoolWithTag(NonPagedPoolNx, cb, 'CrtD');
     if (NULL == cpu_core) {
         return -1;
@@ -154,6 +155,7 @@ void *kmem_zalloc(size_t size, int flag)
 void *kmem_alloc(size_t size, int flag)
 {
     for (;;) {
+        #pragma warning( suppress : 4996 )
         void* p = ExAllocatePoolWithTag(NonPagedPoolNx, size, 'crtD');
         if (NULL != p) {
             return p;
@@ -609,11 +611,6 @@ void dtrace_vpanic(const char *s, __va_list ap)
 {
     panicstr = s;
     KeBugCheckEx(MANUALLY_INITIATED_CRASH, 'crTD', (ULONG_PTR)s, (ULONG_PTR)ap, 0);
-}
-
-void cmn_err(int level, char *format, ...)
-{
-    // TODO:
 }
 
 //

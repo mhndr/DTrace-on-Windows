@@ -171,6 +171,9 @@ print_bitfield(dt_printarg_t *pap, ulong_t off, ctf_encoding_t *ep)
 	buf += sizeof (value) - size;
 	off += ep->cte_bits;
 #endif
+	if (size > sizeof(value))
+		size = sizeof(value);
+
 	bcopy(addr, buf, size);
 	shift = off % NBBY;
 

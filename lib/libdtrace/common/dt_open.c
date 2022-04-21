@@ -352,7 +352,7 @@ static const dt_ident_t _dtrace_globals[] = {
 #ifdef _WIN32
 { "lkd", DT_IDENT_ACTFUNC, 0, DT_ACT_LKD, DT_ATTR_EVOLCMN, DT_VERS_1_0,
 	&dt_idops_func,
-	"void([uint64_t])" },
+	"void(uint32_t)" },
 #endif
 { "lltostr", DT_IDENT_FUNC, 0, DIF_SUBR_LLTOSTR, DT_ATTR_STABCMN, DT_VERS_1_0,
 	&dt_idops_func, "string(int64_t, [int])" },
@@ -567,6 +567,8 @@ static const dt_ident_t _dtrace_globals[] = {
 { "walltimestamp", DT_IDENT_SCALAR, 0, DIF_VAR_WALLTIMESTAMP,
 	DT_ATTR_STABCMN, DT_VERS_1_0,
 	&dt_idops_type, "int64_t" },
+{ "wstr2str", DT_IDENT_FUNC, 0, DIF_SUBR_WSTR2STR, DT_ATTR_STABCMN, DT_VERS_1_13_1,
+    &dt_idops_func, "string(const wchar_t *, [size_t])" },
 { "zonename", DT_IDENT_SCALAR, 0, DIF_VAR_ZONENAME,
 	DT_ATTR_STABCMN, DT_VERS_1_0, &dt_idops_type, "string" },
 
@@ -915,6 +917,11 @@ set_open_errno(dtrace_hdl_t *dtp, int *errp, int err)
 {
 	if (dtp != NULL)
 		dtrace_close(dtp);
+#if defined(_WIN32)
+	else
+		SymCleanup(GetCurrentProcess());
+#endif
+
 	if (errp != NULL)
 		*errp = err;
 	return (NULL);
@@ -1103,6 +1110,29 @@ dt_get_sysinfo(int cmd, char *buf, size_t len)
 }
 #endif
 
+#if defined(_WIN32)
+static BOOL CALLBACK
+SymbolCallbackFunction (
+    _In_ HANDLE ProcessSymHandle,
+    _In_ ULONG ActionCode,
+    _In_opt_ ULONG64 CallbackData,
+    _In_opt_ ULONG64 UserContext
+    )
+
+{
+
+    UNREFERENCED_PARAMETER(ProcessSymHandle);
+    UNREFERENCED_PARAMETER(UserContext);
+
+    if (ActionCode == CBA_DEBUG_INFO) {
+        dt_dprintf("%s", (PCSTR)(ULONG_PTR)CallbackData);
+        return TRUE;
+    }
+
+    return FALSE;
+}
+#endif
+
 static dtrace_hdl_t *
 dt_vopen(int version, int flags, int *errp,
     const dtrace_vector_t *vector, void *arg)
@@ -1129,6 +1159,13 @@ dt_vopen(int version, int flags, int *errp,
 
 	char isadef[32], utsdef[32];
 	char s1[64], s2[64];
+
+#if defined(_WIN32)
+	SymInitialize(GetCurrentProcess(), NULL, FALSE);
+	if (SymRegisterCallback64(GetCurrentProcess(), &SymbolCallbackFunction, 0)) {
+		SymSetOptions(SymGetOptions() | SYMOPT_DEBUG);
+	}
+#endif
 
 	if (version <= 0)
 		return (set_open_errno(dtp, errp, EINVAL));
@@ -1245,7 +1282,7 @@ dt_vopen(int version, int flags, int *errp,
 
 alloc:
 	if ((dtp = malloc(sizeof (dtrace_hdl_t))) == NULL) {
-	        dt_provmod_destroy(&provmod);
+		dt_provmod_destroy(&provmod);
 		return (set_open_errno(dtp, errp, EDT_NOMEM));
 	}
 
@@ -1683,7 +1720,7 @@ alloc:
 	 * Win32 requires a user-mode symbol server to be running in this process
 	 * to support module:name->address resolution for fbt provider.
 	 */
-	dtp->dt_symsvr = dt_symsvr_start();
+	dtp->dt_symsrv = dt_symsrv_start();
 #endif
 
 #ifndef _WIN32
@@ -1781,8 +1818,8 @@ dtrace_close(dtrace_hdl_t *dtp)
 		dt_provider_destroy(dtp, pvp);
 
 #ifdef _WIN32
-	if (dtp->dt_symsvr != NULL)
-		dt_symsvr_stop(dtp->dt_symsvr);
+	if (dtp->dt_symsrv != NULL)
+		dt_symsrv_stop(dtp->dt_symsrv);
 #endif
 
 	if (dtp->dt_fd != -1)
@@ -1836,6 +1873,10 @@ dtrace_close(dtrace_hdl_t *dtp)
 #endif
 	free(dtp->dt_provs);
 	free(dtp);
+
+#if defined(_WIN32)
+	SymCleanup(GetCurrentProcess());
+#endif
 }
 
 int

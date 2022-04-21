@@ -11,7 +11,7 @@ Starting in 2016, the OpenDTrace effort began on GitHub that tried to ensure a p
 ## Install
 
 Prerequisites:
-* Windows 10 x64 Build 18342 or higher
+* Windows 10 x64 Build 1903 or higher
 
 Limitations:
 * Only available for 64-bit platforms

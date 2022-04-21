@@ -98,6 +98,11 @@ long sysconf(int name)
     }
 }
 
+int getpagesize(void)
+{
+    return 4096;
+}
+
 int p_online(processorid_t processorid, int flag)
 {
     return P_ONLINE;
@@ -121,18 +126,27 @@ struct tm *localtime_r(const time_t *timep, struct tm *result)
     return localtime_s(result, timep) ? NULL : result;
 }
 
-void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
+void *mmap64(void *addr, size_t length, int prot, int flags, int fd, size_t offset)
 {
-    assert(-1 == fd);
     assert(0 == offset);
-    assert((MAP_PRIVATE | MAP_ANON) == flags);
-    assert((PROT_READ | PROT_WRITE) == prot);
-    return VirtualAlloc(addr, length, MEM_COMMIT, PAGE_READWRITE);
+    assert(length == (ULONG)length);
+    assert(offset == (ULONG)offset);
+    HANDLE h = (MAP_ANON & flags) ? INVALID_HANDLE_VALUE : (HANDLE)_get_osfhandle(fd);
+    DWORD protect = (PROT_WRITE & prot) ? PAGE_READWRITE : PAGE_READONLY;
+    HANDLE sect = CreateFileMappingW(h, NULL, protect | SEC_COMMIT, 0, (ULONG)length, NULL);
+    if (NULL == sect) {
+        return MAP_FAILED;
+    }
+
+    DWORD access = (PROT_WRITE & prot) ? FILE_MAP_ALL_ACCESS : FILE_MAP_READ;
+    PVOID p = MapViewOfFile(sect, access, 0, (ULONG)offset, length);
+    CloseHandle(sect);
+    return (NULL == p) ? MAP_FAILED : p;
 }
 
 int munmap(void *addr, size_t length)
 {
-    VirtualFree(addr, 0, MEM_RELEASE);
+    UnmapViewOfFile(addr);
     return 0;
 }
 
@@ -146,4 +160,14 @@ int mprotect(void *addr, size_t len, int prot)
         return -1;
     }
 }
+
+ssize_t pread64(int fd, void *buf, size_t count, size_t offset)
+{
+    assert(count == (int)count);
+    assert(offset == (int)offset);
+    lseek(fd, (int)offset, SEEK_SET);
+    return read(fd, buf, (int)count);
+
+}
+
 

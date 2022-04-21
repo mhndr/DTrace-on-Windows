@@ -60,6 +60,7 @@ extern int dt_module_getlibid(dtrace_hdl_t *, dt_module_t *,
 extern dt_module_t *dt_module_getctfmod(dtrace_hdl_t *, dt_module_t *,
     const char *);
 extern ctf_id_t dt_module_function_typeid(dt_module_t *dmp, const char *name);
+extern int dt_module_import_types(dt_module_t *dmp, const char* mask, int* succeeded, int* failed);
 #else
 extern ctf_file_t *dt_module_getctflib(dtrace_hdl_t *, dt_module_t *,
     const char *);

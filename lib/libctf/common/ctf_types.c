@@ -252,6 +252,13 @@ ctf_type_qlname(ctf_file_t *fp, ctf_id_t type, char *buf, size_t len,
 
 			switch (cdp->cd_kind) {
 			case CTF_K_INTEGER:
+				if ((qname != NULL) &&
+				    ((0 == strncmp(name, "unsigned ", sizeof("unsigned"))) ||
+				     (0 == strncmp(name, "signed ", sizeof("signed"))))) {
+					ctf_decl_sprintf(&cd, "%s", name);
+					break;
+				}
+				/* Fallthrough */
 			case CTF_K_FLOAT:
 			case CTF_K_TYPEDEF:
 				if (qname != NULL)

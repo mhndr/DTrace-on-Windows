@@ -324,6 +324,7 @@ dt_probe_discover(dt_provider_t *pvp, const dtrace_probedesc_t *pdp)
 	 * and prp->pr_xargv[] and assign mappings to prp->pr_mapping[].
 	 */
 	for (adp = adv, i = 0; i < xc; i++, adp++) {
+		bzero(&dtt, sizeof(dtt));
 		if (dtrace_type_strcompile(dtp,
 		    adp->dtargd_native, &dtt) != 0) {
 			dt_dprintf("failed to resolve input type %s "
@@ -331,8 +332,7 @@ dt_probe_discover(dt_provider_t *pvp, const dtrace_probedesc_t *pdp)
 			    pvp->pv_desc.dtvd_name, name, i + 1,
 			    dtrace_errmsg(dtp, dtrace_errno(dtp)));
 
-			dtt.dtt_object = NULL;
-			dtt.dtt_ctfp = NULL;
+			bzero(&dtt, sizeof(dtt));
 			dtt.dtt_type = CTF_ERR;
 		} else {
 			dt_node_type_assign(prp->pr_nargv[adp->dtargd_mapping],
@@ -351,8 +351,7 @@ dt_probe_discover(dt_provider_t *pvp, const dtrace_probedesc_t *pdp)
 			    pvp->pv_desc.dtvd_name, name, i + 1,
 			    dtrace_errmsg(dtp, dtrace_errno(dtp)));
 
-			dtt.dtt_object = NULL;
-			dtt.dtt_ctfp = NULL;
+			bzero(&dtt, sizeof(dtt));
 			dtt.dtt_type = CTF_ERR;
 		} else {
 			dt_node_type_assign(prp->pr_xargv[i],

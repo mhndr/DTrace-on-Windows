@@ -348,7 +348,11 @@ dt_pid_per_mod(void *arg, uint64_t vaddr, const char *obj)
 		    pp->dpp_func, &sym, NULL) != 0) {
 			if (strcmp("-", pp->dpp_func) == 0) {
 #ifdef _WIN32
-				return 0;
+				sym.st_value = 0;
+				sym.st_namep = NULL;
+				sym.st_size = ~0;
+				sym.st_tag = SymTagFunction;
+				sym.st_type_idx = 0;
 #else
 				sym.st_name = 0;
 				sym.st_info =

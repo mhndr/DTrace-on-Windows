@@ -2,13 +2,13 @@
 
 ## Requirements
 
-* [Visual Studio 2017](https://visualstudio.microsoft.com/vs/community/) (or newer)
+* [Windows WDK and SDK](https://docs.microsoft.com/windows-hardware/drivers/download-the-wdk) (version 1903 or later)
 * [Git for Windows](https://git-scm.com/download/win)
 * [Windows 10 Anniversary Update](https://blogs.windows.com/windowsexperience/2016/08/02/how-to-get-the-windows-10-anniversary-update/#GD97Eq04wJA7S4P7.97) (or newer)
 
 ## Steps
 
-1. Install Visual Studio with the `Desktop development with C++` and `Universal Windows Platform development` workloads. Ensure the optional `Windows 10 SDK (10.0.17763.0)` component is also selected.
+1. Install WDK/SDK following instructions in https://docs.microsoft.com/windows-hardware/drivers/download-the-wdk
 
 2. Install Git for Windows.
 

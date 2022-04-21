@@ -37,29 +37,8 @@ Abstract:
 #include <windows.h>
 #include <dbghelp.h>
 
+void _libctf_init(void);
 void _dtrace_init(void);
-void dt_dprintf(const char *format, ...);
-
-static BOOL CALLBACK
-SymbolCallbackFunction (
-    _In_ HANDLE ProcessSymHandle,
-    _In_ ULONG ActionCode,
-    _In_opt_ ULONG64 CallbackData,
-    _In_opt_ ULONG64 UserContext
-    )
-
-{
-
-    UNREFERENCED_PARAMETER(ProcessSymHandle);
-    UNREFERENCED_PARAMETER(UserContext);
-
-    if (ActionCode == CBA_DEBUG_INFO) {
-        dt_dprintf("%s", (PCSTR)(ULONG_PTR)CallbackData);
-        return TRUE;
-    }
-
-    return FALSE;
-}
 
 BOOL
 APIENTRY
@@ -77,19 +56,11 @@ DllMain (
     {
     case DLL_PROCESS_ATTACH:
         DisableThreadLibraryCalls(hModule);
-
+        _libctf_init();
         _dtrace_init();
-
-        SymInitialize(GetCurrentProcess(), NULL, FALSE);
-
-        if (SymRegisterCallback64(GetCurrentProcess(), &SymbolCallbackFunction, 0)) {
-            SymSetOptions(SymGetOptions() | SYMOPT_DEBUG);
-        }
-
         break;
 
     case DLL_PROCESS_DETACH:
-        SymCleanup(GetCurrentProcess());
         break;
 
     case DLL_THREAD_ATTACH:

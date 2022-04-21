@@ -1312,8 +1312,15 @@ dt_print_stack(dtrace_hdl_t *dtp, FILE *fp, const char *format,
 			 * interested in the containing module.
 			 */
 			if (dtrace_lookup_by_addr(dtp, pc, NULL, &dts) == 0) {
-				(void) snprintf(c, sizeof (c), "%s`0x%llx",
-				    dts.dts_object, (u_longlong_t)pc);
+#ifdef _WIN32
+				dtrace_objinfo_t oi;
+				if (dtrace_object_info(dtp, dts.dts_object, &oi) == 0) {
+					(void) snprintf(c, sizeof (c), "%s`+0x%llx",
+					    dts.dts_object, (u_longlong_t)(pc - oi.dto_image_base));
+				} else
+#endif
+					(void) snprintf(c, sizeof (c), "%s`0x%llx",
+					    dts.dts_object, (u_longlong_t)pc);
 			} else {
 				(void) snprintf(c, sizeof (c), "0x%llx",
 				    (u_longlong_t)pc);
@@ -1419,8 +1426,15 @@ dt_print_ustack(dtrace_hdl_t *dtp, FILE *fp, const char *format,
 		} else {
 			if (P != NULL && Pobjname(P, pc[i], objname,
 			    sizeof (objname)) != 0) {
-				(void) snprintf(c, sizeof (c), "%s`0x%llx",
-				    dt_basename(objname), (u_longlong_t)pc[i]);
+#ifdef _WIN32
+				uint64_t base = proc_name2map(P, objname);
+				if (base != 0) {
+					(void) snprintf(c, sizeof (c), "%s`+0x%llx",
+					    dt_basename(objname), (u_longlong_t)(pc[i] - base));
+				} else
+#endif
+					(void) snprintf(c, sizeof (c), "%s`0x%llx",
+					    dt_basename(objname), (u_longlong_t)pc[i]);
 			} else {
 				(void) snprintf(c, sizeof (c), "0x%llx",
 				    (u_longlong_t)pc[i]);

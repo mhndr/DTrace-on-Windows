@@ -688,6 +688,7 @@ Return Value:
     }
 
     if (0 != Extension->TotalContextSize) {
+        #pragma warning( suppress : 4996 )
         ContextPtr = ExAllocatePoolWithTag(NonPagedPoolNx,
                                            Extension->TotalContextSize,
                                            'crtD');
@@ -850,6 +851,7 @@ Return Value:
     }
 
     if (!ExtensionInList) {
+        #pragma warning( suppress : 4996 )
         Extension = ExAllocatePoolWithTag(PagedPool,
                                           sizeof(DT_DEVICE_EXTENSION) + Name->Length,
                                          'crtD');
@@ -870,6 +872,7 @@ Return Value:
     // Allocate/link the handler.
     //
 
+    #pragma warning( suppress : 4996 )
     Handler = ExAllocatePoolWithTag(PagedPool,
                                     sizeof(DT_DEVICE_EXTENSION_HANDLER),
                                     'crtD');

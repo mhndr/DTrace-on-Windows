@@ -394,6 +394,12 @@ static void
 dtrace_nullop(void)
 {}
 
+#ifdef _WIN32
+static uint64_t
+dtrace_provider_getargval (
+    void *arg, dtrace_id_t id, void *parg, int argno, void *ctx);
+#endif
+
 static dtrace_pops_t	dtrace_provider_ops = {
 #ifdef _WIN32
 	.dtps_provide =	(void (*)(void *, const char*, const char*, const char*, const char*))dtrace_nullop,
@@ -406,7 +412,11 @@ static dtrace_pops_t	dtrace_provider_ops = {
 	.dtps_suspend =	(void (*)(void *, dtrace_id_t, void *))dtrace_nullop,
 	.dtps_resume =	(void (*)(void *, dtrace_id_t, void *))dtrace_nullop,
 	.dtps_getargdesc =	NULL,
+#ifdef _WIN32
+	.dtps_getargval =	dtrace_provider_getargval,
+#else
 	.dtps_getargval =	NULL,
+#endif
 #ifdef _WIN32
 	.dtps_getframe =	NULL,
 #else
@@ -1598,6 +1608,124 @@ dtrace_multiply_128(uint64_t factor1, uint64_t factor2, uint64_t *product)
 	tmp[1] = 0;
 	dtrace_shift_128(tmp, 32);
 	dtrace_add_128(product, tmp, product);
+}
+
+#define UNICODE_REPLACEMENT 0xFFFD
+
+#define HIGH_SURROGATE_START  0xd800
+#define HIGH_SURROGATE_END    0xdbff
+#define LOW_SURROGATE_START   0xdc00
+#define LOW_SURROGATE_END     0xdfff
+
+/*
+ * Convert utf16 to utf8. The input string is assumed to be host-endian.
+ * The src is assumed to be unsafe memory specified by the DIF program.  The dst
+ * is assumed to be DTrace variable memory that is of the specified type; we
+ * assume that we can store to it directly.
+ *
+ * srcchars - number of characters to get from the src, or -1 indicating that we
+ *	should look for a null-terminator.
+ *
+ * destsize - the size of the destination buffer, including the terminating
+ *   null.
+ */
+static void
+dtrace_wstr2str(uintptr_t src, uint64_t srcchars, char* dest, uint64_t destsize)
+{
+	uint32_t ch = 0;
+	char *destend = dest + destsize;
+	uintptr_t srcend;
+
+	if (srcchars != (uint64_t)-1ui64)
+		srcend = (uintptr_t)(src + srcchars * sizeof(uint16_t));
+	else
+		srcend = (uintptr_t)-2;
+
+	dtrace_bzero(dest, destsize);
+	for (;;) {
+		uint32_t next_ch;
+
+		if (src >= srcend) {
+			/* left-over high surrogate */
+			if (ch) {
+				next_ch = UNICODE_REPLACEMENT;
+			} else {
+				break;
+			}
+
+		} else {
+			next_ch = dtrace_load16(src);
+			src += sizeof(uint16_t);
+			if (ch) {
+				/*
+				 * If the source is a low-surrogate, compose it with the previous
+				 * high-surrogate. Otherwise, insert a replacement character and
+				 * reprocess the current character.
+				 */
+				if (next_ch >= LOW_SURROGATE_START && next_ch <= LOW_SURROGATE_END) {
+					next_ch = (ch - HIGH_SURROGATE_START) * 0x400 + (next_ch - LOW_SURROGATE_START) + 0x10000;
+				} else {
+					next_ch = UNICODE_REPLACEMENT;
+					src -= sizeof(uint16_t);
+				}
+
+			} else {
+				/*
+				 * if we hit a high surrogate, save it away and move to the next
+				 * character
+				 */
+				if (next_ch >= HIGH_SURROGATE_START && next_ch <= HIGH_SURROGATE_END) {
+					ch = next_ch;
+					continue;
+				}
+
+				/*
+				 * Unpaired low surrogates are converted to a replacement
+				 * character.
+				 */
+				if (next_ch >= LOW_SURROGATE_START && next_ch <= LOW_SURROGATE_END)
+					next_ch = UNICODE_REPLACEMENT;
+			}
+		}
+
+		/* break on null */
+		if (next_ch == 0)
+			return;
+
+		if (next_ch <= 0x7F) {
+			if (dest + 1 >= destend) {
+				return;
+			}
+
+			*dest++ = (char)next_ch;
+		} else if (next_ch <= 0x7FF) {
+			if (dest + 2 >= destend) {
+				return;
+			}
+
+			*dest++ = (char)(0xC0 | (next_ch >> 6));
+			*dest++ = (char)(0x80 | (next_ch & 0x3F));
+		} else if (next_ch <= 0xFFFF) {
+			if (dest + 3 >= destend) {
+				return;
+			}
+
+			*dest++ = (char)(0xE0 | (next_ch >> 12));
+			*dest++ = (char)(0x80 | ((next_ch >> 6) & 0x3F));
+			*dest++ = (char)(0x80 | (next_ch & 0x3F));
+		} else {
+			if (dest + 4 >= destend) {
+				return;
+			}
+
+			*dest++ = (char)(0xF0 | ((next_ch >> 18) & 0xF));
+			*dest++ = (char)(0x80 | ((next_ch >> 12) & 0x3F));
+			*dest++ = (char)(0x80 | ((next_ch >> 6) & 0x3F));
+			*dest++ = (char)(0x80 | (next_ch & 0x3F));
+		}
+
+		ch = 0;
+	}
 }
 
 #ifndef _WIN32
@@ -3486,6 +3614,7 @@ dtrace_dif_variable(dtrace_mstate_t *mstate, dtrace_state_t *state, uint64_t v,
 			else
 				val = dtrace_getarg(ndx, aframes);
 
+#ifndef _WIN32
 			/*
 			 * This is regrettably required to keep the compiler
 			 * from tail-optimizing the call to dtrace_getarg().
@@ -3499,6 +3628,13 @@ dtrace_dif_variable(dtrace_mstate_t *mstate, dtrace_state_t *state, uint64_t v,
 				return (val);
 
 			ASSERT(0);
+#else
+            /*
+             * Win32 doesn't walk the stack to get arguments, so tail call does
+             * not matter.
+             */
+            return (val);
+#endif
 		}
 
 		return (mstate->dtms_arg[ndx]);
@@ -4431,6 +4567,9 @@ dtrace_json(uint64_t size, uintptr_t json, char *elemlist, int nelems,
  * interpretation is safe because of our load safety -- the worst that can
  * happen is that a bogus program can obtain bogus results.
  */
+#if defined(_WIN32)
+#pragma warning(suppress: 6262) // Stack usage of is acceptable
+#endif
 static void
 dtrace_dif_subr(uint_t subr, uint_t rd, uint64_t *regs,
     dtrace_key_t *tupregs, int nargs,
@@ -4754,6 +4893,35 @@ dtrace_dif_subr(uint_t subr, uint_t rd, uint64_t *regs,
 		regs[rd] = dest;
 		break;
 	}
+
+    case DIF_SUBR_WSTR2STR: {
+		uintptr_t dest = mstate->dtms_scratch_ptr;
+		uint64_t destsize = state->dts_options[DTRACEOPT_STRSIZE];
+		uint64_t srccount = (uint64_t)-1i64;
+
+		if (nargs > 1)
+			srccount = tupregs[1].dttk_value;
+
+		/*
+		 * This action doesn't require any credential checks since
+		 * probes will not activate in user contexts to which the
+		 * enabling user does not have permissions.
+		 */
+		if (!DTRACE_INSCRATCH(mstate, destsize)) {
+			DTRACE_CPUFLAG_SET(CPU_DTRACE_NOSCRATCH);
+			regs[rd] = 0;
+			break;
+		}
+
+		/*
+		 * The dtrace_wstr2str null-terminates the string at the last valid
+		 * character before the destination buffer is filled.
+		 */
+		dtrace_wstr2str(tupregs[0].dttk_value, srccount, (char *)dest, destsize);
+		mstate->dtms_scratch_ptr += destsize;
+		regs[rd] = dest;
+		break;
+    }
 
 #ifdef illumos
 	case DIF_SUBR_MSGSIZE:
@@ -7167,13 +7335,13 @@ dtrace_action_breakpoint(dtrace_ecb_t *ecb)
 
 #ifdef _WIN32
 void
-dtrace_action_lkd(const char *format, ...)
+dtrace_action_lkd(uint32_t flags, const char *format, ...)
 {
 	va_list alist;
 
 	va_start(alist, format);
 	dtrace_lkd(L"DTRACE", MANUALLY_INITIATED_CRASH, 'crTD', (ULONG_PTR)format,
-				(ULONG_PTR)alist, 0, 0);
+				(ULONG_PTR)alist, 0, flags);
 
 	va_end(alist);
 }
@@ -7241,7 +7409,7 @@ dtrace_action_raise(uint64_t sig)
 
 #ifdef _WIN32
 static boolean_t
-dtrace_action_request_lkd(dtrace_ecb_t *ecb)
+dtrace_action_request_lkd(dtrace_ecb_t *ecb, uint32_t flags)
 {
 	/*
 	* Defer request of LKD to the end of probe processing
@@ -7263,6 +7431,7 @@ dtrace_action_request_lkd(dtrace_ecb_t *ecb)
 	lkd_args.func = probe->dtpr_func;
 	lkd_args.name = probe->dtpr_name;
 	lkd_args.ecb = (void *)ecb;
+	lkd_args.flags = flags;
 	return B_TRUE;
 }
 
@@ -7276,9 +7445,9 @@ dtrace_action_process_lkd(boolean_t active)
 
 	if (!(*flags & CPU_DTRACE_FAULT)) {
 
-		dtrace_action_lkd("dtrace: LKD at probe %s:%s:%s:%s (ecb %p)",
-			lkd_args.prov, lkd_args.mod, lkd_args.func, lkd_args.name,
-			lkd_args.ecb);
+		dtrace_action_lkd(lkd_args.flags,
+			"dtrace: LKD at probe %s:%s:%s:%s (ecb %p)", lkd_args.prov,
+			lkd_args.mod, lkd_args.func, lkd_args.name, lkd_args.ecb);
 	}
 
 	lkd_args.owner = NULL;
@@ -7883,17 +8052,7 @@ dtrace_probe(dtrace_id_t id, uintptr_t arg0, uintptr_t arg1,
 				if (dtrace_priv_kernel_destructive(state))
 					dtrace_action_panic(ecb);
 				continue;
-#ifdef _WIN32
-			case DTRACEACT_LKD:
-				if (dtrace_priv_kernel_destructive(state) &&
-				    (mstate.dtms_ipl == PASSIVE_LEVEL)) {
 
-					ASSERT(mstate->dtms_present & DTRACE_MSTATE_IPL);
-
-					lkd_req = dtrace_action_request_lkd(ecb);
-				}
-				continue;
-#endif
 			case DTRACEACT_STACK:
 				if (!dtrace_priv_kernel(state))
 					continue;
@@ -8047,6 +8206,18 @@ dtrace_probe(dtrace_id_t id, uintptr_t arg0, uintptr_t arg1,
 				if (dtrace_priv_proc_destructive(state))
 					dtrace_action_raise(val);
 				continue;
+
+#ifdef _WIN32
+			case DTRACEACT_LKD:
+				if (dtrace_priv_kernel_destructive(state) &&
+				    (mstate.dtms_ipl == PASSIVE_LEVEL)) {
+
+					ASSERT(mstate->dtms_present & DTRACE_MSTATE_IPL);
+
+					lkd_req = dtrace_action_request_lkd(ecb, (uint32_t)val);
+				}
+				continue;
+#endif
 
 			case DTRACEACT_COMMIT:
 				ASSERT(!committed);
@@ -10638,6 +10809,7 @@ dtrace_difo_validate_helper(dtrace_difo_t *dp)
 			    subr == DIF_SUBR_COPYIN ||
 			    subr == DIF_SUBR_COPYINTO ||
 			    subr == DIF_SUBR_COPYINSTR ||
+			    subr == DIF_SUBR_WSTR2STR ||
 			    subr == DIF_SUBR_INDEX ||
 			    subr == DIF_SUBR_INET_NTOA ||
 			    subr == DIF_SUBR_INET_NTOA6 ||
@@ -15124,9 +15296,9 @@ dtrace_state_create(struct cdev *dev, void *cred __unused)
 
 #ifndef _WIN32
 	/*
-         * Allocate and initialise the per-process per-CPU random state.
+	 * Allocate and initialise the per-process per-CPU random state.
 	 * SI_SUB_RANDOM < SI_SUB_DTRACE_ANON therefore entropy device is
-         * assumed to be seeded at this point (if from Fortuna seed file).
+	 * assumed to be seeded at this point (if from Fortuna seed file).
 	 */
 	(void) read_random(&state->dts_rstate[0], 2 * sizeof(uint64_t));
 	for (cpu_it = 1; cpu_it < NCPU; cpu_it++) {
@@ -16892,8 +17064,9 @@ dtrace_helper_slurp(dof_hdr_t *dof, dof_helper_t *dhp, struct proc *p)
 
 	ASSERT(MUTEX_HELD(&dtrace_lock));
 
-	if ((help = dtrace_helpers_get(p)) == NULL)
-		help = dtrace_helpers_create(p);
+	if (((help = dtrace_helpers_get(p)) == NULL) &&
+	    ((help = dtrace_helpers_create(p)) == NULL))
+		return (-1);
 
 	vstate = &help->dthps_vstate;
 
@@ -16988,13 +17161,7 @@ static dtrace_helpers_t *
 dtrace_helpers_get(proc_t *p)
 {
 #ifdef _WIN32
-	static dtrace_helpers_t *help;
-	if (NULL == help) {
-		help = kmem_zalloc(sizeof (dtrace_helpers_t), KM_SLEEP);
-		help->dthps_actions = kmem_zalloc(sizeof (dtrace_helper_action_t *) *
-			DTRACE_NHELPER_ACTIONS, KM_SLEEP);
-	}
-	return help;
+	return NULL;
 #else
 	return p->p_dtrace_helpers;
 #endif
@@ -17661,7 +17828,7 @@ dtrace_attach(dev_info_t *devi, ddi_attach_cmd_t cmd)
 	    offsetof(dtrace_probe_t, dtpr_prevname));
 
 	if (dtrace_retain_max < 1) {
-		cmn_err(CE_WARN, "illegal value (%lu) for dtrace_retain_max; "
+		cmn_err(CE_WARN, "illegal value (%zu) for dtrace_retain_max; "
 		    "setting to 1", dtrace_retain_max);
 		dtrace_retain_max = 1;
 	}
@@ -18362,12 +18529,14 @@ dtrace_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		} else {
 			for (i = desc.dtpd_id; i <= dtrace_nprobes; i++) {
 				if ((probe = dtrace_probes[i - 1]) != NULL &&
-				    dtrace_match_priv(probe, priv, uid, zoneid))
+				    dtrace_match_priv(probe, priv, uid, zoneid)) {
+					m = 1;
 					break;
+				}
 			}
 		}
 
-		if (probe == NULL) {
+		if (m <= 0) {
 			mutex_exit(&dtrace_lock);
 			return (ESRCH);
 		}
@@ -19042,7 +19211,7 @@ dtrace_load(void)
 	    offsetof(dtrace_probe_t, dtpr_prevname));
 
 	if (dtrace_retain_max < 1) {
-		cmn_err(CE_WARN, "illegal value (%lu) for dtrace_retain_max; "
+		cmn_err(CE_WARN, "illegal value (%zu) for dtrace_retain_max; "
 		    "setting to 1", dtrace_retain_max);
 		dtrace_retain_max = 1;
 	}
@@ -19170,6 +19339,25 @@ dtrace_toxic_ranges(void (*func)(uintptr_t base, uintptr_t limit))
 	(*func)(0, MmUserProbeAddress);
 }
 
+/*
+ * Return an argument from the built-in dtrace provider. Currently this only
+ * applies to the ERROR probe, since that one passes a context with additional
+ * values describing the error.
+ */
+uint64_t
+dtrace_provider_getargval (
+    void *arg, dtrace_id_t id, void *parg, int argno, void *ctx)
+{
+    if (id != dtrace_probeid_error)
+        return 0;
+
+    argno -= 4;
+    if (argno >= 2)
+        return 0;
+
+    return (((uintptr_t *)ctx)[argno]);
+}
+
 void dtrace_probe_error(dtrace_state_t *state, dtrace_epid_t epid, int which,
 			int fault, int fltoffs, uintptr_t illval)
 {
@@ -19183,7 +19371,7 @@ void dtrace_probe_error(dtrace_state_t *state, dtrace_epid_t epid, int which,
 	    (uintptr_t)which, (uintptr_t)fault, &ctx);
 }
 
-
+#pragma warning(suppress: 6262) // Stack usage of dtrace_ioctl is acceptable
 int
 dtrace_ioctl(struct dtrace_state *state, unsigned long cmd, void* arg)
 {
@@ -19466,7 +19654,7 @@ dtrace_ioctl(struct dtrace_state *state, unsigned long cmd, void* arg)
 		dtrace_vstate_t *vstate;
 		int err = 0;
 		int rval;
-                dtrace_enable_io_t enable;
+		dtrace_enable_io_t enable;
 
 		if (arg == NULL) {
 			dtrace_enabling_matchall();
@@ -19796,12 +19984,14 @@ dtrace_ioctl(struct dtrace_state *state, unsigned long cmd, void* arg)
 		} else {
 			for (i = desc.dtpd_id; i <= dtrace_nprobes; i++) {
 				if ((probe = dtrace_probes[i - 1]) != NULL &&
-				    dtrace_match_priv(probe, priv, uid, zoneid))
+				    dtrace_match_priv(probe, priv, uid, zoneid)) {
+					m = 1;
 					break;
+				}
 			}
 		}
 
-		if (probe == NULL) {
+		if (m <= 0) {
 			mutex_exit(&dtrace_lock);
 			return (ESRCH);
 		}
