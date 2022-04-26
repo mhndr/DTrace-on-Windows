@@ -10,6 +10,8 @@ Starting in 2016, the OpenDTrace effort began on GitHub that tried to ensure a p
 
 ## Install
 
+Follow [MSDN instructions](https://docs.microsoft.com/windows-hardware/drivers/devtest/dtrace).
+
 Prerequisites:
 * Windows 10 x64 Build 1903 or higher
 
@@ -20,13 +22,11 @@ Limitations:
 Steps:
 1. Enable `dtrace` in the Boot Configuration Data (BCD) store. (`bcdedit /set dtrace on`) You will need to repeat this step every time you install a newer build of Windows.
 
-2. Download and execute [the dtrace installer](https://download.microsoft.com/download/B/D/4/BD4B95A5-0B61-4D8F-837C-F889AAD8DAA2/DTrace.amd64.msi).
+2. Download and execute [the dtrace installer](https://download.microsoft.com/download/7/9/d/79d6b79a-5836-4118-a9b7-60bc77c97bf7/DTrace.amd64.msi).
 
 3. [Configure the `_NT_SYMBOL_PATH` environment variable](https://docs.microsoft.com/en-us/windows/desktop/dxtecharts/debugging-with-symbols#using-the-microsoft-symbol-server) for local symbol caching.
 
-4. (Optional) [Configure Windows for kernel-mode debugging](https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/getting-started-with-windbg--kernel-mode-). This is only required if you want to trace kernel events using `fbt` or other providers.
-
-5. Reboot the target machine.
+4. Reboot the target machine.
 
 ## Examples
 
@@ -48,6 +48,7 @@ dtrace -Fn "fbt:ntfs::/execname==\"notepad.exe\"/{}"
 
 ## Learn more
 
+* [MSDN](https://docs.microsoft.com/windows-hardware/drivers/devtest/dtrace)
 * [DTrace on Windows](https://techcommunity.microsoft.com/t5/Windows-Kernel-Internals/DTrace-on-Windows/ba-p/362902)
 * [Compiling OpenDTrace for Windows](COMPILING.md)
 * [OpenDTrace Documentation Repository](https://github.com/opendtrace/documentation)

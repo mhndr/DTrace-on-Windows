@@ -3594,10 +3594,15 @@ dt_cook_op2(dt_node_t *dnp, uint_t idflags)
 		 * most of this code with the argument list checking code.
 		 */
 		if (!dt_node_is_string(lp)) {
-			kind = ctf_type_kind(lp->dn_ctfp,
-			    ctf_type_resolve(lp->dn_ctfp, lp->dn_type));
+			if (NULL != lp->dn_ctfp) {
+				kind = ctf_type_kind(lp->dn_ctfp,
+				    ctf_type_resolve(lp->dn_ctfp, lp->dn_type));
+			} else {
+				kind = CTF_ERR;
+			}
 
-			if (kind == CTF_K_ARRAY || kind == CTF_K_FUNCTION) {
+			if (kind == CTF_K_ARRAY || kind == CTF_K_FUNCTION ||
+			    kind == CTF_ERR) {
 				xyerror(D_OP_ARRFUN, "operator %s may not be "
 				    "applied to operand of type \"%s\"\n",
 				    opstr(op),
