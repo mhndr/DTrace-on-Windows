@@ -1,4 +1,3 @@
-
 /*++
 
 Copyright (c) Microsoft Corporation
@@ -83,6 +82,7 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(1)) + (sizeof(uint32_t)*(1)) + sizeof(uint32_t));
             print(*counters);
         }
+
         if (((kmi *)arg0)->Count > 2)
         {
             nodenumber = (uint32_t *) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(2)) + (sizeof(uint32_t)*(2)) );
@@ -90,6 +90,7 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(2)) + (sizeof(uint32_t)*(2)) + sizeof(uint32_t));
             print(*counters);
         }
+
         if (((kmi *)arg0)->Count > 3)
         {
             nodenumber = (uint32_t *) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(3)) + (sizeof(uint32_t)*(3)) );
@@ -97,6 +98,7 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(3)) + (sizeof(uint32_t)*(3)) + sizeof(uint32_t));
             print(*counters);
         }
+
         if (((kmi *)arg0)->Count > 4)
         {
             nodenumber = (uint32_t *) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(4)) + (sizeof(uint32_t)*(4)) );
@@ -104,6 +106,7 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(4)) + (sizeof(uint32_t)*(4)) + sizeof(uint32_t));
             print(*counters);
         }
+
         if (((kmi *)arg0)->Count > 5)
         {
             nodenumber = (uint32_t *) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(5)) + (sizeof(uint32_t)*(5)) );
@@ -111,6 +114,7 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(5)) + (sizeof(uint32_t)*(5)) + sizeof(uint32_t));
             print(*counters);
         }
+
         if (((kmi *)arg0)->Count > 6)
         {
             nodenumber = (uint32_t *) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(6)) + (sizeof(uint32_t)*(6)) );
@@ -118,6 +122,7 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(6)) + (sizeof(uint32_t)*(6)) + sizeof(uint32_t));
             print(*counters);
         }
+
         if (((kmi *)arg0)->Count > 7)
         {
             nodenumber = (uint32_t *) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(7)) + (sizeof(uint32_t)*(7)) );
@@ -125,6 +130,7 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(7)) + (sizeof(uint32_t)*(7)) + sizeof(uint32_t));
             print(*counters);
         }
+
         if (((kmi *)arg0)->Count > 8)
         {
             nodenumber = (uint32_t *) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(8)) + (sizeof(uint32_t)*(8)) );
@@ -132,6 +138,7 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(8)) + (sizeof(uint32_t)*(8)) + sizeof(uint32_t));
             print(*counters);
         }
+
         if (((kmi *)arg0)->Count > 9)
         {
             nodenumber = (uint32_t *) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(9)) + (sizeof(uint32_t)*(9)) );
@@ -139,6 +146,7 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(9)) + (sizeof(uint32_t)*(9)) + sizeof(uint32_t));
             print(*counters);
         }
+
         if (((kmi *)arg0)->Count > 10)
         {
             nodenumber = (uint32_t *) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(10)) + (sizeof(uint32_t)*(10)) );
@@ -146,6 +154,7 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(10)) + (sizeof(uint32_t)*(10)) + sizeof(uint32_t));
             print(*counters);
         }
+
         if (((kmi *)arg0)->Count > 11)
         {
             nodenumber = (uint32_t *) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(11)) + (sizeof(uint32_t)*(11)) );
@@ -153,6 +162,7 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(11)) + (sizeof(uint32_t)*(11)) + sizeof(uint32_t));
             print(*counters);
         }
+
         if (((kmi *)arg0)->Count > 12)
         {
             nodenumber = (uint32_t *) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(12)) + (sizeof(uint32_t)*(12)) );
@@ -160,6 +170,7 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(12)) + (sizeof(uint32_t)*(12)) + sizeof(uint32_t));
             print(*counters);
         }
+
         if (((kmi *)arg0)->Count > 13)
         {
             nodenumber = (uint32_t *) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(13)) + (sizeof(uint32_t)*(13)) );
@@ -167,6 +178,7 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(13)) + (sizeof(uint32_t)*(13)) + sizeof(uint32_t));
             print(*counters);
         }
+
         if (((kmi *)arg0)->Count > 14)
         {
             nodenumber = (uint32_t *) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(14)) + (sizeof(uint32_t)*(14)) );
@@ -174,6 +186,7 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(14)) + (sizeof(uint32_t)*(14)) + sizeof(uint32_t));
             print(*counters);
         }
+
         if (((kmi *)arg0)->Count > 15)
         {
             nodenumber = (uint32_t *) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(15)) + (sizeof(uint32_t)*(15)) );
@@ -181,10 +194,8 @@ etw:d1d93ef7-e1f2-4f45-9943-03d245fe6c00:0xff_0xffffffffffffffff:12
             counters = (m_nodeinfo*) (arg0 + sizeof(EVENT_HEADER) + 8 + (sizeof(m_nodeinfo)*(15)) + (sizeof(uint32_t)*(15)) + sizeof(uint32_t));
             print(*counters);
         }
-
     }
 
     exit(1);
     printcounter++;
 }
-

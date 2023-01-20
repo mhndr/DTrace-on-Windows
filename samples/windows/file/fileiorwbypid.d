@@ -1,4 +1,3 @@
-
 /*++
 
 Copyright (c) Microsoft Corporation
@@ -9,7 +8,7 @@ Module Name:
 
 Abstract:
 
-    This script tracks all file read and write I/O operations. Data is reported every 5 seconds by PID.
+    This script tracks all file read and write I/O operations. Data is reported every 3 seconds by PID.
 
 Requirements:
 
@@ -21,13 +20,12 @@ Usage:
 
 --*/
 
-
 #pragma D option quiet
 #pragma D option destructive
 #pragma D option aggrate=1000us
 
-
-BEGIN {
+BEGIN
+{
     ts = timestamp;
 }
 
@@ -43,7 +41,8 @@ syscall::NtWriteFile:entry
     @read[execname, pid] = sum(0);
 }
 
-tick-3s {
+tick-3s
+{
     system("cls");
     trunc(@read, 10);
     trunc(@write, 10);

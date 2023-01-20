@@ -14,11 +14,14 @@ Abstract:
 
 Usage:
 
-     dtrace -s svchostrpcleak.d
+     dtrace -s filedeletetracker.d
 
 --*/
 
-ERROR{exit(0);}
+ERROR
+{
+    exit(0);
+}
 
 struct ustr{uint16_t buffer[256];};
 
@@ -28,15 +31,16 @@ syscall::NtOpenFile:entry
 {
     this->deleted = args[5] & FILE_DELETE_ON_CLOSE; /* & with  */
 
-    if (this->deleted) {
+    if (this->deleted)
+    {
         this->attr = (POBJECT_ATTRIBUTES)
             copyin(arg2, sizeof(OBJECT_ATTRIBUTES));
 
-        if (this->attr->ObjectName) {
+        if (this->attr->ObjectName)
+        {
             this->objectName = (PUNICODE_STRING)
                 copyin((uintptr_t)this->attr->ObjectName,
                        sizeof(UNICODE_STRING));
-
 
             this->fname = (uint16_t*)
                 copyin((uintptr_t)this->objectName->Buffer,

@@ -1,5 +1,3 @@
-
-
 /*++
 
 Copyright (c) Microsoft Corporation
@@ -48,7 +46,6 @@ Here is a sample registry settings
 
 --*/
 
-
 #pragma D option destructive
 
 syscall:::return
@@ -63,4 +60,3 @@ syscall:::return
         exit(0);
     }
 }
-

@@ -20,10 +20,8 @@ Usage:
 
 --*/
 
-
 #pragma D option quiet
 #pragma D option destructive
-
 
 PLIST_ENTRY head;
 PLIST_ENTRY curptr;
@@ -55,17 +53,21 @@ tick-1ms
 {
     /* use this for pointer parsing */
 
-    if (curptr == head) {
+    if (curptr == head)
+    {
         exit(0);
-
-    } else {
+    }
+    else
+    {
         eprocess_ptr = (struct nt`_EPROCESS*)((intptr_t)curptr - offsetof(nt`_EPROCESS, ActiveProcessLinks));
-        processid = (string)eprocess_ptr->ImageFileName;
+        processName = (string)eprocess_ptr->ImageFileName;
 
-        if ($1 == processid) {
+        if ($1 == processName)
+        {
             found = 1;
-        } else {
-            /*printf("Not matched '%s'\n", processid);*/
+        }
+        else
+        {
             curptr = curptr->Flink;
         }
     }
@@ -77,7 +79,6 @@ tick-1s
 {
     system ("cls");
 
-    /* printf("Match found flink %x eprocess %x process name: %s\n", curptr, (intptr_t) eprocess_ptr, eprocess_ptr->ImageFileName);*/
     printf("Process name: %s\n", eprocess_ptr->ImageFileName);
     printf("Hard fault count %u (Mb)\n", eprocess_ptr->Vm.Instance.HardFaultCount*4096/(1024*1024));
     printf("Page fault count %u (Mb)\n", eprocess_ptr->Vm.Instance.PageFaultCount*4096/(1024*1024));
@@ -88,12 +89,15 @@ tick-1s
     printf("Peak Set Size %llu (Kb)\n", (uint64_t)eprocess_ptr->Vm.Instance.PeakWorkingSetSize*4*1024/1024  );
 
     if (eprocess_ptr->Vm.Instance.Flags.MemoryPriority )
+    {
         printf ("MemoryPriority: Foreground\n");
+    }
     else
+    {
         printf ("MemoryPriority: Background\n");
+    }
 
     printf("Commit charge %llu \n", (uint64_t)eprocess_ptr->CommitCharge*4*1024/1024  );
     printf("Virtual Size %llu (in Mega bytes) \n", (uint64_t)eprocess_ptr->VirtualSize/(1024*1024) );
     printf("Peak Virtual Size %llu (in Mega bytes) \n", (uint64_t)eprocess_ptr->PeakVirtualSize/(1024*1024) );
 }
-

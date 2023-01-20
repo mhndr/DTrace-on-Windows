@@ -1,5 +1,3 @@
-
-
 /*++
 
 Copyright (c) Microsoft Corporation
@@ -44,7 +42,6 @@ tick-3s
     printf("Zero Page Count : %d  Mb \n", this->Partition->PageLists.ZeroedPageListHead.Total*4096/(1024*1024));
     printf("Free Page Count : %d  Mb \n", this->Partition->PageLists.FreePageListHead.Total*4096/(1024*1024));
 
-
     /********** Printing Commit info ******************/
 
     printf("***** Printing Commit Info ******* \n");
@@ -55,7 +52,6 @@ tick-3s
     printf("High Commit Threshold: %u Mb \n", this->Commit->HighCommitThreshold*4096/(1024*1024));
     printf("System Commit Reserve: %u Mb \n", this->Commit->SystemCommitReserve*4096/(1024*1024));
 
-
     printf("******** Gathering details for Partition %d *********\n", this->Partition->Vp.PartitionWs[0].PartitionId);
     printf("Total WorkingSet Size: %u  Mb \n", this->Partition->Vp.PartitionWs[0].WorkingSetSize*4096/(1024*1024));
     printf("Total Page Fault Count: %u  Mb \n", this->Partition->Vp.PartitionWs[0].PageFaultCount*4096/(1024*1024));
@@ -63,5 +59,3 @@ tick-3s
     printf("Total WorkingSet Leaf Size: %u  Mb  \n", this->Partition->Vp.PartitionWs[0].WorkingSetLeafSize*4096/(1024*1024));
     printf("Trimmed Page Count: %u  Mb \n", this->Partition->Vp.PartitionWs[0].TrimmedPageCount*4096/(1024*1024));
 }
-
-

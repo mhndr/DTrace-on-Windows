@@ -7,24 +7,20 @@ Example for tracking a buffer is unfreed even after 60 seconds and exits tracing
 
 */
 
-
 #pragma D option dynvarsize=1000m
 #pragma D option bufsize=240m
 #pragma D option aggsize=240m
-
 
 BEGIN
 {
     tracing = 0;
     checkinterval = 0;
-
 }
 
 fbt:nt:ExAllocatePoolWithTag:entry
-/tracing == 0/
+/ tracing == 0 /
 {
     tracing = 1;
-    ts = timestamp;
 
     /* Start speculating */
     spec = speculation();
@@ -36,7 +32,7 @@ fbt:nt:ExAllocatePoolWithTag:entry
 }
 
 fbt:nt:ExAllocatePoolWithTag:return
-/self->size/
+/ self->size /
 {
 
     addr[(uintptr_t) arg1] = 1;
@@ -47,17 +43,17 @@ fbt:nt:ExAllocatePoolWithTag:return
 }
 
 fbt:nt:ExFreePoolWithTag:entry
-/addr[(uintptr_t) arg0]/
+/ addr[(uintptr_t) arg0] /
 {
     discard(spec);
     spec = 0;
     tracing = 0;
-    checkcount = 0;
+    checkinterval = 0;
     addr[(uintptr_t) arg0] = 0;
 }
 
 tick-$1sec
-/tracing == 1/
+/ tracing == 1 /
 {
     if (checkinterval == 0)
     {
@@ -67,12 +63,12 @@ tick-$1sec
     {
         commit(spec);
         spec = 0;
-        checkcout = 0;
-        tracing == 0;
+        checkinterval = 0;
+        tracing = 0;
     }
     else
     {
-        /* wierd! Error...*/
+        /* weird! Error...*/
     }
 }
 
@@ -85,4 +81,3 @@ END
 {
     printf("Exiting \n");
 }
-

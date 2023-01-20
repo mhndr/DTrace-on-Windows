@@ -27,7 +27,6 @@ struct ustr
 
 fbt:nt:IoCreateDeviceSecure:entry
 {
-
     temp = (uint16_t *) ((PUNICODE_STRING) arg2)->Buffer;
     self->spec = speculation();
     speculate (self->spec);
@@ -36,12 +35,11 @@ fbt:nt:IoCreateDeviceSecure:entry
 }
 
 fbt:nt:SeConvertStringSecurityDescriptorToSecurityDescriptor:entry
-/ self->sddlstring && self->spec/
+/ self->sddlstring && self->spec /
 {
     speculate (self->spec);
     printf(" Device SDDL %*ws \n ", 128, ((struct ustr *) arg0)->buffer);
 }
-
 
 fbt:nt:*IoCreateDeviceSecure*:return
 {
@@ -56,5 +54,3 @@ fbt:nt:*IoCreateDeviceSecure*:return
         /* printf("Device creation failed %x \n ", arg1); */
     }
 }
-
-
