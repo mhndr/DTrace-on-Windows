@@ -1,3 +1,22 @@
+/*++
+
+Copyright (c) Microsoft Corporation
+
+Module Name:
+
+    virtualmemoryallocfree.d
+
+Abstract:
+
+    This script tracks virtual memmory allocations and frees.
+    Updates the output every 3 seconds.
+
+Usage:
+
+     dtrace -s virtualmemoryallocfree.d
+
+--*/
+
 #pragma D option quiet
 #pragma D option destructive
 

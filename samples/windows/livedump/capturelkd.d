@@ -48,11 +48,13 @@ Here is a sample registry settings
 
 #pragma D option destructive
 
+inline NTSTATUS STATUS_UNSUCCESSFUL = 0xc0000001UL;
+
 syscall:::return
 {
     self->status = (NTSTATUS)arg0;
 
-    if (self->status == 0xc0000001UL)
+    if (self->status == STATUS_UNSUCCESSFUL)
     {
         printf ("Return value arg0:%x \n", self->status);
         printf ("Triggering LiveDump \n");
