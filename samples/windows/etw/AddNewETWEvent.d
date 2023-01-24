@@ -1,5 +1,3 @@
-
-
 /*++
 
 Copyright (c) Microsoft Corporation
@@ -27,9 +25,8 @@ FAQ:
 
 --*/
 
-
 syscall:::return
-/(uint32_t)arg0 == 0xc0000001UL/
+/ (uint32_t)arg0 == 0xc0000001UL /
 {
     etw_trace
         (

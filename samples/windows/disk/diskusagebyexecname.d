@@ -1,4 +1,3 @@
-
 /*++
 
 Copyright (c) Microsoft Corporation
@@ -9,8 +8,7 @@ Module Name:
 
 Abstract:
 
-    This script provides the disk counters for
-    a given execname. The execname is case sensitive.
+    This script provides the disk counters for a given execname. The execname is case sensitive.
 
 Requirements:
 
@@ -21,9 +19,6 @@ Usage:
      dtrace -s diskusagebyexecname.d <execname>
 
 --*/
-
-
-
 
 #pragma D option quiet
 #pragma D option destructive
@@ -38,7 +33,6 @@ uint64_t byteswrite;
 int readcount;
 int writecount;
 int flushcount;
-
 
 BEGIN
 {
@@ -55,46 +49,52 @@ BEGIN
 }
 
 tick-10ms
-/!found/
+/ !found /
 {
     /* use this for pointer parsing */
     eprocess_ptr = (struct nt`_EPROCESS *)((intptr_t)curptr - offsetof(nt`_EPROCESS, ActiveProcessLinks));
     processid = (int) eprocess_ptr->UniqueProcessId;
     processName = (string)eprocess_ptr->ImageFileName;
 
-    if ($1 == processName) {
+    if ($1 == processName)
+    {
         found = 1;
-    } else {
-        /*printf("No match on '%s' (%d)\n", processName, processid);*/
+    }
+    else
+    {
         curptr = curptr->Flink;
-        if (curptr == head) {
+        if (curptr == head)
+        {
             exit(0);
         }
     }
 }
 
 tick-10s
-/!found/
+/ !found /
 {
     exit(0);
 }
 
 END
-/!found/
+/ !found /
 {
     printf("No matching process found for %s \n", $1);
 }
 
 tick-1s
-/found/
+/ found /
 {
     system("cls");
 
     self->DiskCounters = eprocess_ptr->DiskCounters;
 
-    if (firstpass) {
+    if (firstpass)
+    {
         firstpass = 0;
-    } else {
+    }
+    else
+    {
         self->bytesread = self->DiskCounters->BytesRead - bytesread;
         self->byteswrite = self->DiskCounters->BytesWritten - byteswrite;
         self->readcount = self->DiskCounters->ReadOperationCount - readcount;
@@ -110,7 +110,6 @@ tick-1s
         printf("Read Operation Count %d \n", self->readcount);
         printf("Write Operation Count %d \n", self->writecount);
         printf("Flush Operation Count %d \n", self->flushcount);
-
     }
 
     bytesread = self->DiskCounters->BytesRead;
@@ -119,4 +118,3 @@ tick-1s
     writecount = self->DiskCounters->WriteOperationCount;
     flushcount =  self->DiskCounters->FlushOperationCount;
 }
-

@@ -1,5 +1,3 @@
-
-
 /*++
 
 Copyright (c) Microsoft Corporation
@@ -26,32 +24,24 @@ Requirements:
 
 Usage:
 
-     dtrace -s svchostrpcleak.d
+     dtrace -s svchostrpcleak.d <pid>
 
 --*/
 
-
 #pragma D option nspec=80
 
-inline ULONG ALPC_FLG_MSG_SEC_ATTR        = 0x80000000;
 inline ULONG ALPC_FLG_MSG_DATAVIEW_ATTR   = 0x40000000;
-inline ULONG ALPC_FLG_MSG_CONTEXT_ATTR    = 0x20000000;
-inline ULONG ALPC_FLG_MSG_HANDLE_ATTR     = 0x10000000;
 
 uint32_t exitReq;
 
-BEGIN {
+BEGIN
+{
     self->spec = 0;
     exitReq = 0;
 }
-/*
-#define ALPC_VIEWFLG_UNMAP_EXISTING        0x00010000
-#define ALPC_VIEWFLG_AUTO_RELEASE          0x00020000
-#define ALPC_VIEWFLG_SECURED_ACCESS        0x00040000
-*/
 
 tick-1s
-/exitReq/
+/ exitReq /
 {
     exit(0);
 }
@@ -60,13 +50,14 @@ tick-1s
     Free Speculative buffers regardless by zero assignment. */
 
 syscall::NtAlpcCreateSectionView:entry
-/pid==$1/
+/ pid == $1 /
 {
 /*++
     __in HANDLE PortHandle,                      arg0
     __reserved ULONG Flags,                      arg1
     __inout PALPC_DATA_VIEW_ATTR ViewAttributes  arg2
 --*/
+
     self->ViewAttributes = arg2;
 
     if (self->spec) {
@@ -81,7 +72,7 @@ syscall::NtAlpcCreateSectionView:entry
 
 /* Continue speculative tracing */
 syscall::NtAlpcDeletePortSection:entry
-/self->spec/
+/ self->spec /
 {
     speculate(self->spec);
     printf("%s", probefunc);
@@ -90,11 +81,10 @@ syscall::NtAlpcDeletePortSection:entry
 
 /* Continue speculative tracing */
 syscall::NtAlpcCreateSectionView:return
-/self->ViewAttributes/
+/ self->ViewAttributes /
 {
-
-    if (arg0 == 0) {
-
+    if (arg0 == 0)
+    {
         /*
           VIEW base = offset 0x10 from ALPC_DATA_VIEW_ATTR
         */
@@ -117,8 +107,10 @@ syscall::NtAlpcCreateSectionView:return
                *this->sectionhandle);
 
         ustack();
-    } else {
-        /*fuction failed nothing to see here*/
+    }
+    else
+    {
+        /* Function failed, nothing to see here */
     }
 
     self->ViewAttributes = 0;
@@ -126,7 +118,7 @@ syscall::NtAlpcCreateSectionView:return
 
 /* Continue speculative tracing */
 pid$1:rpcrt4::entry
-/self->spec/
+/ self->spec /
 {
     speculate(self->spec);
     printf("%s\n", probefunc);
@@ -134,7 +126,7 @@ pid$1:rpcrt4::entry
 
 /* Discard speculative buffers when a matching Send View has been found. */
 syscall::NtAlpcSendWaitReceivePort:entry
-/self->spec/
+/ self->spec /
 {
 /*++
 __in HANDLE PortHandle,                                                    arg0
@@ -147,7 +139,8 @@ __inout_opt PALPC_MESSAGE_ATTRIBUTES ReceiveMessageAttributes,             arg6
 __in_opt PLARGE_INTEGER Timeout                                            arg7
 --*/
 
-    if ((0 != arg2) && (0 != arg3)) {
+    if ((0 != arg2) && (0 != arg3))
+    {
 
         /*
         Grab Valid flags from 2nd ULONG in ALPC_MESSAGE_ATTRIBUTES struct
@@ -157,11 +150,10 @@ __in_opt PLARGE_INTEGER Timeout                                            arg7
         this->msgav = (uint32_t*)
             copyin(arg3 + 4, sizeof(uint32_t));
 
-        if (*this->msgav & ALPC_FLG_MSG_DATAVIEW_ATTR) {
-
+        if (*this->msgav & ALPC_FLG_MSG_DATAVIEW_ATTR)
+        {
             discard(self->spec);
             self->spec = 0;
         }
     }
 }
-

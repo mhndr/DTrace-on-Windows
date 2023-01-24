@@ -34,6 +34,4 @@ syscall::NtCreateUserProcess:entry
     printf("Process %s PID %d created %*ws \n", execname,pid,
            this->ProcessParameters->ImagePathName.Length / 2,
            ((struct ustr*)this->fname)->buffer);
-
 }
-

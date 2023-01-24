@@ -1,7 +1,7 @@
-/* 
+/*
 Note: Run this script with aggsortkeypos variable set. This variable informs D-Trace to sort the output based on first index (size).
 
-Usage:dtrace -s <script.d> -x aggsortkey -x aggsortkeypos=1 
+Usage:dtrace -s <script.d> -x aggsortkey -x aggsortkeypos=1
 
 Output: Script runs for 30 seconds and outputs the KSec allocation/free summary. You can set this to whatever time necessary.
 
@@ -9,7 +9,7 @@ Output: Script runs for 30 seconds and outputs the KSec allocation/free summary.
 
 #pragma D option destructive
 #pragma D option quiet
-#pragma D option dynvarsize=0x10000000 
+#pragma D option dynvarsize=0x10000000
 
 union tag
 {
@@ -21,17 +21,17 @@ union tag
 this union tag myTag;
 
 fbt:nt:ExAllocatePoolWithTag:entry
-{	
+{
     /* This is KSec in reserve. Convert ASCII to Hex => Hex('ceSK').*/
-    if (arg2 == 0x6365734b) 
-    { 
+    if (arg2 == 0x6365734b)
+    {
 		self->size = (unsigned int) arg1;
 		@allocstack[stack(), self->size] = count();
     }
 }
 
 fbt:nt:ExAllocatePoolWithTag:return
-/self->size/
+/ self->size /
 {
     @mem[(uintptr_t) arg1] = sum(1);
     addr[(uintptr_t) arg1] = 1;
@@ -40,12 +40,12 @@ fbt:nt:ExAllocatePoolWithTag:return
     size[(uintptr_t) arg1] = self->size;
     @sizealloc[self->size] = count();
     @delta[self->size] = sum(1);
-    
+
     self->size = 0;
 }
 
 fbt:nt:ExFreePoolWithTag:entry
-/addr[(uintptr_t) arg0]/
+/ addr[(uintptr_t) arg0] /
 {
     @mem[(uintptr_t) arg0] = sum (-1);
     addr[(uintptr_t) arg0] -= 1;
@@ -55,20 +55,18 @@ fbt:nt:ExFreePoolWithTag:entry
 }
 
 tick-30s
-{	
+{
     exit(0);
 }
 
-END 
+END
 {
-
    printf("%10s %10s %10s %10s\n", "SIZE", "ALLOC", "FREE", "DELTA");
    printa("%10d %@10d %@10d %@10d\n", @sizealloc, @sizefree, @delta);
 
    printf("Printing stacks \n");
    printa (@allocstack);
-    
+
    printf("== REPORT ==\n\n");
    printa("0x%x => %@u\n",@mem);
 }
-
