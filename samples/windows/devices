@@ -25,9 +25,6 @@ Usage:
 /*#define STACK_MAX 50 */
 inline int STACK_MAX = 50;
 
-struct ustr {
-    uint16_t buffer[512];
-};
 
 /*explicit stack for traversing tree-like data structures*/
 struct myStack {
@@ -44,10 +41,9 @@ BEGIN
     currptr = (struct nt`_DEVICE_NODE*)nt`IopRootDeviceNode;
     sibling_ptr = currptr->Sibling;
     child_ptr   = currptr->Child;
-
-    instance_name = currptr->InstancePath;
-    printf("%.*ws \n", instance_name.Length/2, ((struct ustr *)instance_name.Buffer)->buffer);
-
+    
+    this->instance_name = wstr2str(currptr->InstancePath.Buffer, currptr->InstancePath.Length / 2);    
+    printf("%s \n", this->instance_name);
 
     my_stack.top = -1;
     my_stack.level = 5;
@@ -60,9 +56,9 @@ BEGIN
 tick-5000
 /begun && currptr/
 {
-    instance_name = currptr->InstancePath;
     printf("%*s", my_stack.level, "");
-    printf("%.*ws \n", instance_name.Length/2, ((struct ustr *)instance_name.Buffer)->buffer);
+    this->instance_name = wstr2str(currptr->InstancePath.Buffer, currptr->InstancePath.Length / 2);    
+    printf("%s \n", this->instance_name);
 
     sibling_ptr = currptr->Sibling;
     child_ptr   = currptr->Child;
