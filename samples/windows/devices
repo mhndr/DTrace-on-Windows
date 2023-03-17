@@ -46,7 +46,7 @@ BEGIN
     child_ptr   = currptr->Child;
 
     instance_name = currptr->InstancePath;
-    printf("%*ws \n", instance_name.Length/2, ((struct ustr *)instance_name.Buffer)->buffer);
+    printf("%.*ws \n", instance_name.Length/2, ((struct ustr *)instance_name.Buffer)->buffer);
 
 
     my_stack.top = -1;
@@ -62,7 +62,7 @@ tick-5000
 {
     instance_name = currptr->InstancePath;
     printf("%*s", my_stack.level, "");
-    printf("%*ws \n", instance_name.Length/2, ((struct ustr *)instance_name.Buffer)->buffer);
+    printf("%.*ws \n", instance_name.Length/2, ((struct ustr *)instance_name.Buffer)->buffer);
 
     sibling_ptr = currptr->Sibling;
     child_ptr   = currptr->Child;
