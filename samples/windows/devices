@@ -1,0 +1,102 @@
+/*++
+
+Copyright (c) Microsoft Corporation
+
+Module Name:
+
+    dev_enum.d
+
+Abstract:
+
+    This script lists device tree.
+
+Requirements:
+
+    This script needs symbol's to be configured.
+
+Usage:
+
+     dtrace -s dev_enum.d -y srv*
+
+--*/
+
+#pragma D option quiet
+
+/*#define STACK_MAX 50 */
+inline int STACK_MAX = 50;
+
+struct ustr {
+    uint16_t buffer[512];
+};
+
+/*explicit stack for traversing tree-like data structures*/
+struct myStack {
+    struct nt`_DEVICE_NODE *ptrs[STACK_MAX];
+    int top;
+    int level;
+}my_stack;
+
+/* node pointer for the current iteration */
+struct nt`_DEVICE_NODE *curptr;
+
+BEGIN
+{
+    currptr = (struct nt`_DEVICE_NODE*)nt`IopRootDeviceNode;
+    sibling_ptr = currptr->Sibling;
+    child_ptr   = currptr->Child;
+
+    instance_name = currptr->InstancePath;
+    printf("%*ws \n", instance_name.Length/2, ((struct ustr *)instance_name.Buffer)->buffer);
+
+
+    my_stack.top = -1;
+    my_stack.level = 5;
+
+    currptr = child_ptr;
+    begun = 1;
+}
+
+
+tick-5000
+/begun && currptr/
+{
+    instance_name = currptr->InstancePath;
+    printf("%*s", my_stack.level, "");
+    printf("%*ws \n", instance_name.Length/2, ((struct ustr *)instance_name.Buffer)->buffer);
+
+    sibling_ptr = currptr->Sibling;
+    child_ptr   = currptr->Child;
+
+    currptr = NULL;
+    if(child_ptr)
+    {
+        currptr = child_ptr;
+        if(sibling_ptr)
+        {
+            my_stack.ptrs[++my_stack.top] = sibling_ptr;
+            my_stack.level += 5;
+        }
+    }
+
+    if(!child_ptr  && sibling_ptr)
+    {
+        currptr = sibling_ptr;
+    }
+
+    if(!child_ptr  && !sibling_ptr && my_stack.top >= 0)
+    {
+        currptr = my_stack.ptrs[my_stack.top--];
+        my_stack.level -= 5;
+    }
+
+    if(!currptr)
+    {
+        exit(0);
+    }
+}
+
+tick-2s
+{
+	print("\nEnumeration taking too long, exiting...");
+	exit(0);
+} 
